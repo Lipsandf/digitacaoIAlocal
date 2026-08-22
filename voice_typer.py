@@ -40,6 +40,12 @@ from faster_whisper import WhisperModel
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "transcriptions_history.json"
 MODEL_SIZE = "large-v3"
+if os.path.exists("model_choice.txt"):
+    try:
+        with open("model_choice.txt", "r") as f:
+            c = f.read().strip()
+            if c: MODEL_SIZE = c
+    except: pass
 
 config = {
     "mic_index": 0,
@@ -60,6 +66,7 @@ def save_config():
 
 model = None
 is_recording = False
+is_transcribing = False
 audio_queue = []
 last_context = ""
 current_rms = 0.0
@@ -113,8 +120,11 @@ def recording_thread_func():
         transcribe_and_type(audio_queue, SAMPLE_RATE)
 
 def transcribe_and_type(buffer, sample_rate):
-    global last_context, model
-    if model is None: return
+    global last_context, model, is_transcribing, overlay_instance
+    if model is None: 
+        is_transcribing = False
+        overlay_instance.hide()
+        return
     
     buf = io.BytesIO()
     p = pyaudio.PyAudio()
@@ -157,6 +167,9 @@ def transcribe_and_type(buffer, sample_rate):
             signals.history_updated.emit()
     except Exception as e:
         print(f"Erro na transcrição: {e}")
+    finally:
+        is_transcribing = False
+        overlay_instance.hide()
 
 # =============================================
 # OVERLAY: ONDAS COM FAKE GLOW
@@ -225,6 +238,21 @@ class OverlayWindow(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
+        if is_transcribing:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(26, 26, 46, 200))
+            painter.drawRoundedRect(self.rect(), 10, 10)
+            
+            painter.setPen(QColor("#7c3aed"))
+            painter.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+            dots = "." * ((self.frame_count // 10) % 4)
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, f"Transcrevendo{dots}")
+            
+            angle = (self.frame_count * 10) % 360
+            painter.setPen(QPen(QColor("#a78bfa"), 4))
+            painter.drawArc(self.width_ // 2 - 120, self.height_ // 2 - 15, 30, 30, -angle * 16, 120 * 16)
+            return
+            
         vol = current_rms if is_recording else 0
         amp = max(2.0, min(60.0, vol / 40.0))
         if not is_recording: amp = 1.0
@@ -519,16 +547,17 @@ class MainWindow(QMainWindow):
             print("Erro ao registrar hotkey (pynput):", e)
 
     def toggle_recording(self):
-        global is_recording
+        global is_recording, is_transcribing, overlay_instance
         if not is_recording:
             is_recording = True
+            is_transcribing = False
             winsound.Beep(1500, 150)
             overlay_instance.show()
             threading.Thread(target=recording_thread_func, daemon=True).start()
         else:
             is_recording = False
+            is_transcribing = True
             winsound.Beep(1000, 150)
-            overlay_instance.hide()
 
     def load_history(self):
         for i in reversed(range(self.hist_layout.count())): 

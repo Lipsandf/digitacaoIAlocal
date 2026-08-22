@@ -1,23 +1,73 @@
 Write-Host "=======================================================" -ForegroundColor Cyan
-Write-Host "         INSTALACAO DO DIGITADOR IA (VOZ)              " -ForegroundColor Cyan
+Write-Host "         DIGITADOR IA (VOZ) - INSTALADOR               " -ForegroundColor Yellow
 Write-Host "=======================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Ola! Baixando o codigo do Github..." -ForegroundColor Green
+Write-Host "Selecione uma opcao:" -ForegroundColor White
+Write-Host "[1] Instalar o Digitador IA" -ForegroundColor Green
+Write-Host "[2] Desinstalar o Digitador IA (Apagar tudo)" -ForegroundColor Red
+Write-Host ""
+$choice = Read-Host "Digite o numero da opcao e aperte Enter (1 ou 2)"
+
+if ($choice -eq "2") {
+    Write-Host "Encerrando o programa em segundo plano..." -ForegroundColor Yellow
+    Stop-Process -Name "wscript" -ErrorAction SilentlyContinue
+    Stop-Process -Name "pythonw" -ErrorAction SilentlyContinue
+    
+    Write-Host "Apagando os atalhos..." -ForegroundColor Yellow
+    $startupPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Digitador_IA.lnk"
+    $desktopPath = "$([Environment]::GetFolderPath('Desktop'))\Digitador_IA.lnk"
+    if (Test-Path $startupPath) { Remove-Item -Path $startupPath -Force }
+    if (Test-Path $desktopPath) { Remove-Item -Path $desktopPath -Force }
+    
+    Write-Host "Apagando a pasta do programa (Pode demorar uns segundos)..." -ForegroundColor Yellow
+    $InstallDir = "$env:USERPROFILE\DigitadorIA"
+    if (Test-Path $InstallDir) {
+        Remove-Item -Path $InstallDir -Recurse -Force
+    }
+    
+    Write-Host "=======================================================" -ForegroundColor Cyan
+    Write-Host "Desinstalado com sucesso! O seu PC esta limpo." -ForegroundColor Green
+    Write-Host "=======================================================" -ForegroundColor Cyan
+    exit
+}
+
+if ($choice -ne "1") {
+    Write-Host "Opcao invalida. Saindo..." -ForegroundColor Red
+    exit
+}
+
+Write-Host ""
+Write-Host "Qual Inteligencia Artificial voce deseja baixar?" -ForegroundColor Yellow
+Write-Host "[1] IA Leve/Rapida (PADRAO) -> Funciona em qualquer PC e Notebook" -ForegroundColor Green
+Write-Host "[2] IA Pesada/Ultra   (PRO) -> EXIGE placa de video NVIDIA potente" -ForegroundColor Cyan
+Write-Host ""
+$aiChoice = Read-Host "Digite o numero da opcao e aperte Enter (1 ou 2)"
+$modelChoiceText = "small"
+if ($aiChoice -eq "2") {
+    $modelChoiceText = "large-v3"
+}
 
 $InstallDir = "$env:USERPROFILE\DigitadorIA"
+Write-Host ""
+Write-Host "Iniciando instalacao em: $InstallDir" -ForegroundColor Cyan
+Write-Host "Ola! Baixando o codigo do Github..." -ForegroundColor Green
+
 if (Test-Path $InstallDir) {
-    Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $InstallDir -Recurse -Force
 }
-New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 $zipPath = "$env:TEMP\DigitadorIA.zip"
 Invoke-WebRequest -Uri "https://github.com/Lipsandf/digitacaoIAlocal/archive/refs/heads/main.zip" -OutFile $zipPath
 Expand-Archive -Path $zipPath -DestinationPath $env:TEMP -Force
 Move-Item -Path "$env:TEMP\digitacaoIAlocal-main\*" -Destination $InstallDir -Force
-Remove-Item -Path "$env:TEMP\digitacaoIAlocal-main" -Recurse -Force
 Remove-Item -Path $zipPath -Force
+Remove-Item -Path "$env:TEMP\digitacaoIAlocal-main" -Recurse -Force
 
 Set-Location $InstallDir
+
+# Salva a escolha do usuario
+$modelChoiceText | Out-File -FilePath "$InstallDir\model_choice.txt" -Encoding ascii
 
 Write-Host "Verificando o Python..." -ForegroundColor Green
 $pythonExe = "python"
@@ -72,7 +122,7 @@ $shortcutPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Digi
 $shortcut = $wshell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = "wscript.exe"
 $shortcut.Arguments = "`"$VBS_PATH`""
-$shortcut.IconLocation = "$InstallDir\venv\Scripts\pythonw.exe"
+$shortcut.IconLocation = "$InstallDir\icon.ico"
 $shortcut.WorkingDirectory = "$InstallDir"
 $shortcut.Save()
 
@@ -82,7 +132,7 @@ $shortcutDesktopPath = "$desktopPath\Digitador_IA.lnk"
 $shortcutDesktop = $wshell.CreateShortcut($shortcutDesktopPath)
 $shortcutDesktop.TargetPath = "wscript.exe"
 $shortcutDesktop.Arguments = "`"$VBS_PATH`""
-$shortcutDesktop.IconLocation = "$InstallDir\venv\Scripts\pythonw.exe"
+$shortcutDesktop.IconLocation = "$InstallDir\icon.ico"
 $shortcutDesktop.WorkingDirectory = "$InstallDir"
 $shortcutDesktop.Save()
 
