@@ -72,11 +72,9 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 
-# =============================================
-# COMUNICAÇÃO DE THREADS (Sinais)
-# =============================================
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
+    hide_overlay = pyqtSignal()
 
 signals = WorkerSignals()
 
@@ -123,7 +121,7 @@ def transcribe_and_type(buffer, sample_rate):
     global last_context, model, is_transcribing, overlay_instance
     if model is None: 
         is_transcribing = False
-        overlay_instance.hide()
+        signals.hide_overlay.emit()
         return
     
     buf = io.BytesIO()
@@ -169,7 +167,7 @@ def transcribe_and_type(buffer, sample_rate):
         print(f"Erro na transcrição: {e}")
     finally:
         is_transcribing = False
-        overlay_instance.hide()
+        signals.hide_overlay.emit()
 
 # =============================================
 # OVERLAY: ONDAS COM FAKE GLOW
@@ -724,6 +722,7 @@ def main():
     main_window = MainWindow()
     print("Criando Overlay", flush=True)
     overlay_instance = OverlayWindow()
+    signals.hide_overlay.connect(overlay_instance.hide)
     
     print("Criando Tray", flush=True)
     tray = QSystemTrayIcon()

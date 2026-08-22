@@ -183,7 +183,13 @@ if ($gpuType -eq "nvidia") {
     & $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile PyQt6 pynput pillow
 }
 
-Write-Host "[3/4] Criando arquivos de execucao invisivel..." -ForegroundColor Green
+Write-Host "[3/4] Baixando o modelo de Inteligência Artificial ($modelChoiceText) diretamente no seu PC..." -ForegroundColor Green
+Write-Host "Isso garante que o modelo esteja 100% pronto para uso sem falsos positivos. Aguarde..." -ForegroundColor Yellow
+
+# Executa um script Python rápido para forçar o download e exibir a barra de progresso no terminal
+& $pipCmd -c "from faster_whisper import WhisperModel; print('Iniciando download do modelo $modelChoiceText...'); WhisperModel('$modelChoiceText', device='cpu', compute_type='int8')"
+
+Write-Host "[4/4] Criando arquivos de execucao invisivel..." -ForegroundColor Green
 $VBS_PATH = "$InstallDir\launcher.vbs"
 $vbsContent = @"
 Set WshShell = CreateObject("WScript.Shell")
