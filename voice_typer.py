@@ -838,20 +838,19 @@ def load_ai_model():
 
 def main():
     global app_instance, overlay_instance, main_window
+    
+    # Identificador único para a Barra de Tarefas do Windows não agrupar como Python genérico
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("lip.digitadoria.voicetyper.1.0")
+    except Exception:
+        pass
+
     app_instance = QApplication(sys.argv)
     app_instance.setQuitOnLastWindowClosed(False)
     
     threading.Thread(target=load_ai_model, daemon=True).start()
     
-    main_window = MainWindow()
-    print("Criando Overlay", flush=True)
-    overlay_instance = OverlayWindow()
-    signals.hide_overlay.connect(overlay_instance.hide)
-    
-    print("Criando Tray", flush=True)
-    tray = QSystemTrayIcon()
-    
-    print("Criando Pixmap", flush=True)
+    # Cria o ícone roxo nativo do microfone
     pix = QPixmap(64, 64)
     pix.fill(Qt.GlobalColor.transparent)
     p = QPainter(pix)
@@ -862,8 +861,25 @@ def main():
     p.drawRect(20, 54, 24, 4)
     p.end()
     
-    print("Configurando tray", flush=True)
-    tray.setIcon(QIcon(pix))
+    app_icon = QIcon(pix)
+    if os.path.exists("icon.ico"):
+        app_icon = QIcon("icon.ico")
+    else:
+        try: pix.save("icon.ico")
+        except: pass
+        
+    app_instance.setWindowIcon(app_icon)
+
+    main_window = MainWindow()
+    main_window.setWindowIcon(app_icon)
+    
+    print("Criando Overlay", flush=True)
+    overlay_instance = OverlayWindow()
+    signals.hide_overlay.connect(overlay_instance.hide)
+    
+    print("Criando Tray", flush=True)
+    tray = QSystemTrayIcon()
+    tray.setIcon(app_icon)
     menu = QMenu()
     action_show = QAction("Abrir Painel")
     action_show.triggered.connect(main_window.show)
