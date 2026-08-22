@@ -7,6 +7,8 @@ import time
 import math
 import wave
 import ctypes
+import faulthandler
+faulthandler.enable()
 from ctypes import wintypes
 import winsound
 from pynput import keyboard as pynput_keyboard
