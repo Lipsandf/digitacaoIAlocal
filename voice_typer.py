@@ -513,8 +513,19 @@ class MainWindow(QMainWindow):
         return mics
 
     def change_mic(self):
-        config["mic_index"] = self.mic_combo.currentData()
-        save_config()
+        new_idx = self.mic_combo.currentData()
+        if new_idx is not None:
+            self._is_changing_mic = True
+            if hasattr(self, 'mic_timer'):
+                self.mic_timer.stop()
+            config["mic_index"] = new_idx
+            save_config()
+            QTimer.singleShot(300, self._resume_mic_test)
+
+    def _resume_mic_test(self):
+        self._is_changing_mic = False
+        if hasattr(self, 'mic_timer'):
+            self.mic_timer.start(150)
 
     def capture_shortcut(self):
         dlg = ShortcutDialog(self)
@@ -627,6 +638,8 @@ class MainWindow(QMainWindow):
             self.load_history()
 
     def update_mic_test(self):
+        if getattr(self, '_is_changing_mic', False):
+            return
         if not is_recording and self.stack.currentIndex() == 1:
             try:
                 p = pyaudio.PyAudio()
