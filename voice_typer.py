@@ -689,14 +689,19 @@ def load_ai_model():
 
     # Fallback para CPU
     print("Caindo para o modo CPU...")
+    import multiprocessing
+    total_cores = multiprocessing.cpu_count()
+    # Usa quase todos os nucleos para pico de velocidade, mas deixa 1 ou 2 livres para o Windows nao travar
+    smart_threads = max(1, total_cores - 2) if total_cores > 4 else total_cores
+    
     try:
-        model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=4)
+        model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=smart_threads)
         winsound.Beep(800, 100)
         winsound.Beep(1200, 100)
     except Exception as e2:
         print("Erro critico ao carregar IA no modo int8, tentando float32...", e2)
         try:
-            model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="float32", cpu_threads=4)
+            model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="float32", cpu_threads=smart_threads)
             winsound.Beep(800, 100)
             winsound.Beep(1200, 100)
         except Exception as e3:
