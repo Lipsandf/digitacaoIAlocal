@@ -107,12 +107,70 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 
+APP_VERSION = "0.02"
+
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
     hide_overlay = pyqtSignal()
+    mic_level_signal = pyqtSignal(int)
     update_result_signal = pyqtSignal(str)
 
 signals = WorkerSignals()
+
+class MicTestManager:
+    def __init__(self):
+        self.p = None
+        self.stream = None
+        self.current_mic_index = None
+
+    def _audio_callback(self, in_data, frame_count, time_info, status):
+        try:
+            import numpy as np
+            samples = np.frombuffer(in_data, dtype=np.int16).astype(np.float32)
+            rms = float(np.sqrt(np.mean(samples ** 2)))
+            val = min(100, int((rms / 3500.0) * 100))
+            signals.mic_level_signal.emit(val)
+        except Exception:
+            signals.mic_level_signal.emit(0)
+        return (None, pyaudio.paContinue)
+
+    def start_test(self, mic_index):
+        self.stop_test()
+        if mic_index is None or is_recording:
+            return
+        
+        self.current_mic_index = mic_index
+        try:
+            if self.p is None:
+                self.p = pyaudio.PyAudio()
+            self.stream = self.p.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                input_device_index=mic_index,
+                frames_per_buffer=1024,
+                stream_callback=self._audio_callback
+            )
+            self.stream.start_stream()
+            print(f"[DEBUG MIC] Teste assincrono ativado no mic {mic_index}", flush=True)
+        except Exception as e:
+            print(f"[DEBUG MIC] Nao foi possivel abrir mic {mic_index}: {e}", flush=True)
+            signals.mic_level_signal.emit(0)
+
+    def stop_test(self):
+        signals.mic_level_signal.emit(0)
+        if self.stream is not None:
+            try:
+                self.stream.stop_stream()
+                self.stream.close()
+            except Exception: pass
+            self.stream = None
+        if self.p is not None:
+            try:
+                self.p.terminate()
+            except Exception: pass
+            self.p = None
 
 # =============================================
 # GRAVAÇÃO E TRANSCRIÇÃO
@@ -523,7 +581,11 @@ class MainWindow(QMainWindow):
         btn_hide.clicked.connect(self.hide)
 
         signals.history_updated.connect(self.load_history)
+        signals.mic_level_signal.connect(self.mic_prog.setValue)
         signals.update_result_signal.connect(self.update_result_handler)
+        
+        self.mic_tester = MicTestManager()
+        self.stack.currentChanged.connect(self.on_page_changed)
 
     def manual_check_update(self):
         self.btn_version.setText("⏳ Verificando...")
@@ -533,9 +595,13 @@ class MainWindow(QMainWindow):
         self.btn_version.setText(msg)
 
     def on_page_changed(self, index):
-        if hasattr(self, 'mic_worker'):
-            self.mic_worker.active_page = (index == 1)
-            print(f"[DEBUG MIC] Pagina alterada para {index}. Teste de mic ativo: {index == 1}", flush=True)
+        if hasattr(self, 'mic_tester'):
+            if index == 1:
+                print(f"[DEBUG MIC] Entrou na pagina de microfone. Ativando mic {config.get('mic_index')}", flush=True)
+                self.mic_tester.start_test(config.get("mic_index", None))
+            else:
+                print("[DEBUG MIC] Saiu da pagina de microfone. Desativando teste.", flush=True)
+                self.mic_tester.stop_test()
         
     def showEvent(self, event):
         super().showEvent(event)
@@ -566,10 +632,11 @@ class MainWindow(QMainWindow):
     def change_mic(self):
         new_idx = self.mic_combo.currentData()
         if new_idx is not None:
+            print(f"[DEBUG MIC] Selecionado novo microfone no combo: {new_idx}", flush=True)
             config["mic_index"] = new_idx
             save_config()
-            try: winsound.Beep(1200, 80)
-            except: pass
+            if hasattr(self, 'mic_tester') and self.stack.currentIndex() == 1:
+                self.mic_tester.start_test(new_idx)
 
     def capture_shortcut(self):
         dlg = ShortcutDialog(self)
