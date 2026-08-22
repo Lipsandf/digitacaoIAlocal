@@ -521,10 +521,6 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         main_layout.addWidget(self.stack)
         
-        signals.history_updated.connect(self.load_history)
-        signals.mic_level_signal.connect(self.mic_prog.setValue)
-        signals.update_result_signal.connect(self.update_result_handler)
-        
         page_tut = QWidget()
         l_tut = QVBoxLayout(page_tut)
         title_tut = QLabel("Como usar o Digitador por Voz")
@@ -629,6 +625,7 @@ class MainWindow(QMainWindow):
 
         signals.history_updated.connect(self.load_history)
         signals.mic_level_signal.connect(self.mic_prog.setValue)
+        signals.update_result_signal.connect(self.update_result_handler)
         
         self.mic_worker = MicTestThread()
         self.mic_worker.current_mic_index = config.get("mic_index", None)
