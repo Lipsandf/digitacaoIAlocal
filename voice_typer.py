@@ -118,35 +118,44 @@ class MicTestThread(QThread):
 
             # Se o microfone mudou, fecha o stream anterior suavemente
             if last_mic != target_mic:
+                print(f"[DEBUG MIC] Trocando microfone de {last_mic} para {target_mic}...", flush=True)
                 if stream is not None:
                     try:
                         stream.stop_stream()
                         stream.close()
-                    except: pass
+                        print("[DEBUG MIC] Stream antigo fechado.", flush=True)
+                    except Exception as e: print(f"[DEBUG MIC] Erro ao fechar stream: {e}", flush=True)
                     stream = None
                 if p is not None:
-                    try: p.terminate()
-                    except: pass
+                    try: 
+                        p.terminate()
+                        print("[DEBUG MIC] PyAudio antigo finalizado.", flush=True)
+                    except Exception as e: print(f"[DEBUG MIC] Erro ao fechar PyAudio: {e}", flush=True)
                     p = None
                 last_mic = target_mic
-                time.sleep(0.15)
+                time.sleep(0.2)
                 continue
 
             # Inicializa o PyAudio apenas uma vez
             if p is None:
                 try:
+                    print(f"[DEBUG MIC] Inicializando PyAudio para mic {target_mic}...", flush=True)
                     p = pyaudio.PyAudio()
-                except Exception:
-                    time.sleep(0.3)
+                except Exception as e:
+                    print(f"[DEBUG MIC] Erro ao criar PyAudio: {e}", flush=True)
+                    time.sleep(0.5)
                     continue
 
             # Abre o stream de áudio e mantém aberto
             if stream is None:
                 try:
+                    print(f"[DEBUG MIC] Abrindo stream de audio no indice {target_mic}...", flush=True)
                     stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, 
                                     input=True, input_device_index=target_mic, frames_per_buffer=1024)
-                except Exception:
-                    time.sleep(0.3)
+                    print(f"[DEBUG MIC] Stream aberto com sucesso!", flush=True)
+                except Exception as e:
+                    print(f"[DEBUG MIC] Falha ao abrir stream no mic {target_mic}: {e}", flush=True)
+                    time.sleep(0.5)
                     continue
 
             # Lê os bytes do stream ativo
