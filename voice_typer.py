@@ -645,22 +645,47 @@ cuda_driver_warning = False
 
 def load_ai_model():
     global model, cuda_driver_warning
+    # Tenta CUDA FP16
     try:
         model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="float16")
         winsound.Beep(1000, 100)
         winsound.Beep(1500, 100)
+        print("Carregado na GPU NVIDIA via CUDA (float16)!")
+        return
     except Exception as e:
-        err_msg = str(e).lower()
-        if "insufficient" in err_msg or "driver" in err_msg or "cuda" in err_msg:
-            cuda_driver_warning = True
-            print("AVISO: Driver de video NVIDIA desatualizado! Atualize para usar a Placa de Video em velocidade maxima.")
-        print("Erro ao carregar IA via CUDA. Tentando CPU...", e)
+        print("CUDA float16 nao suportado pela placa. Tentando CUDA int8/float32...", e)
+        
+        # Tenta CUDA INT8 (Perfeito para MX250 e Serie GTX 10xx)
         try:
-            model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
-            winsound.Beep(800, 100)
-            winsound.Beep(1200, 100)
-        except Exception as e2:
-            print("Erro critico ao carregar IA:", e2)
+            model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="int8")
+            winsound.Beep(1000, 100)
+            winsound.Beep(1500, 100)
+            print("Carregado com SUCESSO na GPU NVIDIA via CUDA (Modo INT8)! Transcricao ULTRA RAPIDA ativada.")
+            return
+        except Exception as e_int8:
+            print("CUDA int8 falhou. Tentando CUDA float32...", e_int8)
+            
+            # Tenta CUDA FLOAT32
+            try:
+                model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="float32")
+                winsound.Beep(1000, 100)
+                winsound.Beep(1500, 100)
+                print("Carregado com SUCESSO na GPU NVIDIA via CUDA (Modo FLOAT32)!")
+                return
+            except Exception as e_f32:
+                print("Erro ao carregar GPU CUDA:", e_f32)
+                err_msg = str(e_f32).lower()
+                if "insufficient" in err_msg or "driver" in err_msg:
+                    cuda_driver_warning = True
+
+    # Fallback para CPU
+    print("Caindo para o modo CPU...")
+    try:
+        model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
+        winsound.Beep(800, 100)
+        winsound.Beep(1200, 100)
+    except Exception as e2:
+        print("Erro critico ao carregar IA:", e2)
 
 def main():
     global app_instance, overlay_instance, main_window
