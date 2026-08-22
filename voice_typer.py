@@ -75,10 +75,11 @@ def save_config():
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f)
 
+RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
+
 def check_for_updates(manual=False):
     try:
         import urllib.request
-        import subprocess
         url = f"{VERSION_URL}?t={int(time.time())}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'})
         with urllib.request.urlopen(req, timeout=5) as response:
@@ -86,12 +87,27 @@ def check_for_updates(manual=False):
         
         print(f"[AUTO-UPDATE] Versao local: {APP_VERSION} | Versao GitHub: {remote_ver}", flush=True)
         if remote_ver and remote_ver != APP_VERSION:
-            signals.update_result_signal.emit(f"🚀 Atualizando para v{remote_ver}...")
-            print(f"[AUTO-UPDATE] Nova versao {remote_ver} disponivel! Executando atualizador...", flush=True)
-            cmd = 'powershell -ExecutionPolicy Bypass -Command "irm https://lip.tec.br/instalar.ps1 | iex"'
-            subprocess.Popen(cmd, shell=True)
-            time.sleep(1)
-            sys.exit(0)
+            signals.update_result_signal.emit(f"🚀 Baixando v{remote_ver}...")
+            print(f"[AUTO-UPDATE] Nova versao {remote_ver} disponivel! Baixando via Python nativo...", flush=True)
+            
+            code_url = f"{RAW_CODE_URL}?t={int(time.time())}"
+            code_req = urllib.request.Request(code_url, headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'})
+            with urllib.request.urlopen(code_req, timeout=10) as code_resp:
+                new_code = code_resp.read().decode('utf-8')
+                
+            if "QApplication" in new_code and "main()" in new_code:
+                script_path = os.path.abspath(__file__)
+                temp_path = script_path + ".tmp"
+                with open(temp_path, "w", encoding="utf-8") as f:
+                    f.write(new_code)
+                    
+                os.replace(temp_path, script_path)
+                with open("version.txt", "w", encoding="utf-8") as f:
+                    f.write(remote_ver)
+                    
+                signals.update_result_signal.emit(f"✅ Atualizado para v{remote_ver}!")
+                time.sleep(1)
+                os.execv(sys.executable, [sys.executable, script_path])
         else:
             if manual:
                 signals.update_result_signal.emit(f"✅ Versão v{APP_VERSION} é a mais recente!")
