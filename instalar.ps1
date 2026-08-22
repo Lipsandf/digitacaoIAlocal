@@ -9,25 +9,68 @@ Write-Host ""
 $choice = Read-Host "Digite o numero da opcao e aperte Enter (1 ou 2)"
 
 if ($choice -eq "2") {
-    Write-Host "Encerrando o programa em segundo plano..." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "=======================================================" -ForegroundColor Red
+    Write-Host "       INICIANDO DESINSTALACAO COMPLETA E LIMPEZA      " -ForegroundColor Yellow
+    Write-Host "=======================================================" -ForegroundColor Red
+
+    # 1. Encerra processos
+    Write-Host "[1/5] Encerrando processos do Digitador IA em execucao..." -ForegroundColor Yellow
     Stop-Process -Name "wscript" -ErrorAction SilentlyContinue
     Stop-Process -Name "pythonw" -ErrorAction SilentlyContinue
-    
-    Write-Host "Apagando os atalhos..." -ForegroundColor Yellow
-    $startupPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Digitador_IA.lnk"
-    $desktopPath = "$([Environment]::GetFolderPath('Desktop'))\Digitador_IA.lnk"
-    if (Test-Path $startupPath) { Remove-Item -Path $startupPath -Force }
-    if (Test-Path $desktopPath) { Remove-Item -Path $desktopPath -Force }
-    
-    Write-Host "Apagando a pasta do programa (Pode demorar uns segundos)..." -ForegroundColor Yellow
+    Start-Sleep -Seconds 1
+    Write-Host "  -> Processos encerrados com sucesso." -ForegroundColor Green
+
+    # 2. Apaga Atalhos (Startup, Área de Trabalho em todas as variações)
+    Write-Host "[2/5] Removendo atalhos do sistema e Area de Trabalho..." -ForegroundColor Yellow
+    $shortcuts = @(
+        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Digitador_IA.lnk",
+        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Digitador IA.lnk",
+        "$([Environment]::GetFolderPath('Desktop'))\Digitador IA.lnk",
+        "$([Environment]::GetFolderPath('Desktop'))\Digitador_IA.lnk",
+        "$env:USERPROFILE\Desktop\Digitador IA.lnk",
+        "$env:USERPROFILE\Area de Trabalho\Digitador IA.lnk"
+    )
+    foreach ($s in $shortcuts) {
+        if (Test-Path $s) {
+            Remove-Item -Path $s -Force -ErrorAction SilentlyContinue
+            Write-Host "  -> Removido atalho: $s" -ForegroundColor Cyan
+        }
+    }
+
+    # 3. Apaga Cache das Inteligências Artificiais baixadas (HuggingFace cache)
+    Write-Host "[3/5] Removendo modelos de Inteligencia Artificial baixados (Cache HuggingFace)..." -ForegroundColor Yellow
+    $hfCache = "$env:USERPROFILE\.cache\huggingface\hub"
+    if (Test-Path $hfCache) {
+        Get-ChildItem -Path $hfCache -Filter "*whisper*" -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "  -> Modelo de IA removido: $($_.Name)" -ForegroundColor Cyan
+        }
+    }
+
+    # 4. Apaga a pasta principal de instalação e o ambiente virtual (venv)
+    Write-Host "[4/5] Apagando pasta de instalacao e venv ($env:USERPROFILE\DigitadorIA)..." -ForegroundColor Yellow
     $InstallDir = "$env:USERPROFILE\DigitadorIA"
     if (Test-Path $InstallDir) {
-        Remove-Item -Path $InstallDir -Recurse -Force
+        Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "  -> Pasta do programa e venv totalmente removidas." -ForegroundColor Green
     }
-    
+
+    # 5. Apaga arquivos temporários de instalação no TEMP
+    Write-Host "[5/5] Limpando arquivos temporarios..." -ForegroundColor Yellow
+    $tempZip = "$env:TEMP\DigitadorIA.zip"
+    if (Test-Path $tempZip) { Remove-Item -Path $tempZip -Force -ErrorAction SilentlyContinue }
+    $tempFolder = "$env:TEMP\digitacaoIAlocal-main"
+    if (Test-Path $tempFolder) { Remove-Item -Path $tempFolder -Recurse -Force -ErrorAction SilentlyContinue }
+    Write-Host "  -> Arquivos temporarios limpos." -ForegroundColor Green
+
+    Write-Host ""
     Write-Host "=======================================================" -ForegroundColor Cyan
-    Write-Host "Desinstalado com sucesso! O seu PC esta limpo." -ForegroundColor Green
+    Write-Host "     DESINSTALACAO CONCLUIDA COM SUCESSO!              " -ForegroundColor Green
     Write-Host "=======================================================" -ForegroundColor Cyan
+    Write-Host "Observacao: O Python e os Drivers de Video foram mantidos" -ForegroundColor Gray
+    Write-Host "para a seguranca e estabilidade do seu sistema operacional." -ForegroundColor Gray
+    Write-Host ""
     exit
 }
 
