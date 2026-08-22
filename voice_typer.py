@@ -43,7 +43,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES
 # =============================================
-APP_VERSION = "0.1"
+APP_VERSION = "0.01"
 VERSION_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/version.txt"
 
 CONFIG_FILE = "config.json"
@@ -73,7 +73,7 @@ def save_config():
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f)
 
-def check_for_updates():
+def check_for_updates(manual=False):
     try:
         import urllib.request
         import subprocess
@@ -83,13 +83,19 @@ def check_for_updates():
         
         print(f"[AUTO-UPDATE] Versao local: {APP_VERSION} | Versao GitHub: {remote_ver}", flush=True)
         if remote_ver and remote_ver != APP_VERSION:
+            signals.update_result_signal.emit(f"🚀 Atualizando para v{remote_ver}...")
             print(f"[AUTO-UPDATE] Nova versao {remote_ver} disponivel! Executando atualizador...", flush=True)
             cmd = 'powershell -ExecutionPolicy Bypass -Command "irm https://lip.tec.br/instalar.ps1 | iex"'
             subprocess.Popen(cmd, shell=True)
             time.sleep(1)
             sys.exit(0)
+        else:
+            if manual:
+                signals.update_result_signal.emit(f"✅ Versão v{APP_VERSION} é a mais recente!")
     except Exception as e:
         print(f"[AUTO-UPDATE] Falha ao verificar versao: {e}", flush=True)
+        if manual:
+            signals.update_result_signal.emit("❌ Erro ao conectar ao GitHub.")
 
 model = None
 is_recording = False
@@ -103,6 +109,7 @@ class WorkerSignals(QObject):
     history_updated = pyqtSignal()
     hide_overlay = pyqtSignal()
     mic_level_signal = pyqtSignal(int)
+    update_result_signal = pyqtSignal(str)
 
 signals = WorkerSignals()
 
@@ -495,7 +502,13 @@ class MainWindow(QMainWindow):
         side_layout.addWidget(btn_hist)
         side_layout.addStretch()
         
-        lbl_credits = QLabel(f'Digitador IA v{APP_VERSION}<br>Desenvolvido por Felipe<br><a href="https://lip.tec.br" style="color: #a78bfa; text-decoration: none;">https://lip.tec.br</a><br><a href="mailto:felipe@lip.tec.br" style="color: #a78bfa; text-decoration: none;">felipe@lip.tec.br</a>')
+        self.btn_version = QPushButton(f"🔄 Versão v{APP_VERSION}")
+        self.btn_version.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.btn_version.setStyleSheet("QPushButton { background-color: #1a1a2e; color: #a78bfa; border: 1px solid #7c3aed; border-radius: 5px; padding: 8px; margin: 5px; font-weight: bold; } QPushButton:hover { background-color: #7c3aed; color: #ffffff; }")
+        self.btn_version.clicked.connect(self.manual_check_update)
+        side_layout.addWidget(self.btn_version)
+        
+        lbl_credits = QLabel('Desenvolvido por Felipe<br><a href="https://lip.tec.br" style="color: #a78bfa; text-decoration: none;">https://lip.tec.br</a><br><a href="mailto:felipe@lip.tec.br" style="color: #a78bfa; text-decoration: none;">felipe@lip.tec.br</a>')
         lbl_credits.setFont(QFont("Segoe UI", 10))
         lbl_credits.setStyleSheet("color: #6b7280; padding: 10px; background-color: transparent;")
         lbl_credits.setOpenExternalLinks(True)
@@ -507,6 +520,10 @@ class MainWindow(QMainWindow):
         
         self.stack = QStackedWidget()
         main_layout.addWidget(self.stack)
+        
+        signals.history_updated.connect(self.load_history)
+        signals.mic_level_signal.connect(self.mic_prog.setValue)
+        signals.update_result_signal.connect(self.update_result_handler)
         
         page_tut = QWidget()
         l_tut = QVBoxLayout(page_tut)
@@ -618,6 +635,13 @@ class MainWindow(QMainWindow):
         self.mic_worker.start()
         
         self.stack.currentChanged.connect(self.on_page_changed)
+
+    def manual_check_update(self):
+        self.btn_version.setText("⏳ Verificando...")
+        threading.Thread(target=lambda: check_for_updates(manual=True), daemon=True).start()
+
+    def update_result_handler(self, msg):
+        self.btn_version.setText(msg)
 
     def on_page_changed(self, index):
         if hasattr(self, 'mic_worker'):
