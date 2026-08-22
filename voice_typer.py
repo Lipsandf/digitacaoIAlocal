@@ -379,6 +379,13 @@ class MainWindow(QMainWindow):
         title_tut.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
         l_tut.addWidget(title_tut, alignment=Qt.AlignmentFlag.AlignTop)
         
+        self.banner_cuda = QLabel("⚠️ ATENÇÃO: Seu driver de vídeo NVIDIA está antigo! O programa caiu para o modo CPU. Atualize o driver da placa para ter velocidade máxima de transcrição.")
+        self.banner_cuda.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self.banner_cuda.setWordWrap(True)
+        self.banner_cuda.setStyleSheet("background-color: #7c2d12; color: #fde047; padding: 12px; border-radius: 6px; border: 1px solid #eab308;")
+        self.banner_cuda.setVisible(False)
+        l_tut.addWidget(self.banner_cuda)
+        
         info_tut = QLabel(f"1. Clique na caixa de texto abaixo para focar.\n2. Pressione {config['shortcut_name']} para iniciar.\n3. Fale e veja a onda mágica reagir.\n4. Pressione {config['shortcut_name']} novamente para transcrever.")
         info_tut.setFont(QFont("Segoe UI", 14))
         l_tut.addWidget(info_tut)
@@ -476,6 +483,8 @@ class MainWindow(QMainWindow):
         
     def showEvent(self, event):
         super().showEvent(event)
+        if cuda_driver_warning:
+            self.banner_cuda.setVisible(True)
         if not hasattr(self, '_hotkey_registered'):
             self.register_native_hotkey()
             self._hotkey_registered = True
@@ -632,13 +641,19 @@ class MainWindow(QMainWindow):
 # =============================================
 # INICIALIZAÇÃO E MODELO IA
 # =============================================
+cuda_driver_warning = False
+
 def load_ai_model():
-    global model
+    global model, cuda_driver_warning
     try:
         model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="float16")
         winsound.Beep(1000, 100)
         winsound.Beep(1500, 100)
     except Exception as e:
+        err_msg = str(e).lower()
+        if "insufficient" in err_msg or "driver" in err_msg or "cuda" in err_msg:
+            cuda_driver_warning = True
+            print("AVISO: Driver de video NVIDIA desatualizado! Atualize para usar a Placa de Video em velocidade maxima.")
         print("Erro ao carregar IA via CUDA. Tentando CPU...", e)
         try:
             model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
