@@ -85,29 +85,92 @@ class MicTestThread(QThread):
         self.running = True
         self.active_page = False
         self.current_mic_index = None
+        self._lock = threading.Lock()
+
+    def set_mic_index(self, index):
+        with self._lock:
+            self.current_mic_index = index
 
     def run(self):
+        p = None
+        stream = None
+        last_mic = None
+
         while self.running:
-            if self.active_page and not is_recording and self.current_mic_index is not None:
+            if not self.active_page or is_recording or self.current_mic_index is None:
+                if stream is not None:
+                    try:
+                        stream.stop_stream()
+                        stream.close()
+                    except: pass
+                    stream = None
+                if p is not None:
+                    try: p.terminate()
+                    except: pass
+                    p = None
+                last_mic = None
+                signals.mic_level_signal.emit(0)
+                time.sleep(0.2)
+                continue
+
+            with self._lock:
+                target_mic = self.current_mic_index
+
+            # Se o microfone mudou, fecha o stream anterior suavemente
+            if last_mic != target_mic:
+                if stream is not None:
+                    try:
+                        stream.stop_stream()
+                        stream.close()
+                    except: pass
+                    stream = None
+                if p is not None:
+                    try: p.terminate()
+                    except: pass
+                    p = None
+                last_mic = target_mic
+                time.sleep(0.15)
+                continue
+
+            # Inicializa o PyAudio apenas uma vez
+            if p is None:
                 try:
                     p = pyaudio.PyAudio()
+                except Exception:
+                    time.sleep(0.3)
+                    continue
+
+            # Abre o stream de áudio e mantém aberto
+            if stream is None:
+                try:
                     stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, 
-                                    input=True, input_device_index=self.current_mic_index, frames_per_buffer=1024)
-                    data = stream.read(1024, exception_on_overflow=False)
-                    stream.stop_stream()
-                    stream.close()
-                    p.terminate()
-                    
-                    import numpy as np
-                    samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-                    rms = float(np.sqrt(np.mean(samples ** 2)))
-                    val = min(100, int((rms / 4000.0) * 100))
-                    signals.mic_level_signal.emit(val)
-                except:
-                    signals.mic_level_signal.emit(0)
-            else:
+                                    input=True, input_device_index=target_mic, frames_per_buffer=1024)
+                except Exception:
+                    time.sleep(0.3)
+                    continue
+
+            # Lê os bytes do stream ativo
+            try:
+                data = stream.read(1024, exception_on_overflow=False)
+                import numpy as np
+                samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+                rms = float(np.sqrt(np.mean(samples ** 2)))
+                val = min(100, int((rms / 4000.0) * 100))
+                signals.mic_level_signal.emit(val)
+            except Exception:
                 signals.mic_level_signal.emit(0)
-            time.sleep(0.12)
+                if stream is not None:
+                    try: stream.close()
+                    except: pass
+                    stream = None
+            time.sleep(0.05)
+
+        if stream is not None:
+            try: stream.close()
+            except: pass
+        if p is not None:
+            try: p.terminate()
+            except: pass
 
 # =============================================
 # GRAVAÇÃO E TRANSCRIÇÃO
@@ -555,7 +618,7 @@ class MainWindow(QMainWindow):
         if new_idx is not None:
             config["mic_index"] = new_idx
             if hasattr(self, 'mic_worker'):
-                self.mic_worker.current_mic_index = new_idx
+                self.mic_worker.set_mic_index(new_idx)
             save_config()
 
     def capture_shortcut(self):
