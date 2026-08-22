@@ -52,10 +52,17 @@ Write-Host ""
 Write-Host "Iniciando instalacao em: $InstallDir" -ForegroundColor Cyan
 Write-Host "Ola! Baixando o codigo do Github..." -ForegroundColor Green
 
-if (Test-Path $InstallDir) {
-    Remove-Item -Path $InstallDir -Recurse -Force
+# Encerra processos antigos para liberar os arquivos
+Stop-Process -Name "wscript" -ErrorAction SilentlyContinue
+Stop-Process -Name "pythonw" -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+
+if (-not (Test-Path $InstallDir)) {
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+} else {
+    # Apaga o conteudo interno para nao falhar se o terminal estiver aberto na pasta
+    Get-ChildItem -Path $InstallDir -Exclude "venv" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
-New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 $zipPath = "$env:TEMP\DigitadorIA.zip"
 Invoke-WebRequest -Uri "https://github.com/Lipsandf/digitacaoIAlocal/archive/refs/heads/main.zip" -OutFile $zipPath
