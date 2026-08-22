@@ -1,0 +1,21 @@
+# Ambientes virtuais
+venv/
+env/
+.env/
+
+# Cache do Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Arquivos locais e de dados criados em tempo de execução
+config.json
+transcriptions_history.json
+historico_transcricoes.txt
+*.log
+out.txt
+debug*.py
+
+# Arquivos gerados no Windows
+launcher.vbs
+*.lnk
