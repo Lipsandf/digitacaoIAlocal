@@ -690,11 +690,17 @@ def load_ai_model():
     # Fallback para CPU
     print("Caindo para o modo CPU...")
     try:
-        model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
+        model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=4)
         winsound.Beep(800, 100)
         winsound.Beep(1200, 100)
     except Exception as e2:
-        print("Erro critico ao carregar IA:", e2)
+        print("Erro critico ao carregar IA no modo int8, tentando float32...", e2)
+        try:
+            model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="float32", cpu_threads=4)
+            winsound.Beep(800, 100)
+            winsound.Beep(1200, 100)
+        except Exception as e3:
+            print("Falha total na CPU:", e3)
 
 def main():
     global app_instance, overlay_instance, main_window
