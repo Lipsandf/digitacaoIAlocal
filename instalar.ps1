@@ -76,11 +76,29 @@ Set-Location $InstallDir
 # Salva a escolha do usuario
 $modelChoiceText | Out-File -FilePath "$InstallDir\model_choice.txt" -Encoding ascii
 
-Write-Host "Verificando o Python..." -ForegroundColor Green
+Write-Host "Escaneando o Hardware da maquina..." -ForegroundColor Green
+$gpus = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+$gpuType = "cpu"
+foreach ($g in $gpus) {
+    if ($g -like "*NVIDIA*") {
+        $gpuType = "nvidia"
+        break
+    }
+    if ($g -like "*AMD*" -or $g -like "*Radeon*") {
+        $gpuType = "amd"
+    }
+}
+
+Write-Host "Hardware detectado: Placa de Video -> $gpuType" -ForegroundColor Cyan
+$gpuType | Out-File -FilePath "$InstallDir\hardware.txt" -Encoding ascii
+
+Write-Host "Verificando a versao do Python..." -ForegroundColor Green
 $pythonExe = "python"
 $pythonOutput = python --version 2>&1 | Out-String
-if ($LASTEXITCODE -ne 0 -or $pythonOutput -match "not found") {
-    Write-Host "O Python não foi encontrado. Baixando e instalando silenciosamente..." -ForegroundColor Yellow
+
+# Se nao tiver python ou se NAO for versao 3.11, força o download do Python 3.11.8
+if ($LASTEXITCODE -ne 0 -or $pythonOutput -notmatch "3\.11") {
+    Write-Host "Garantindo ambiente estavel com Python 3.11.8..." -ForegroundColor Yellow
     Write-Host "Isso pode levar cerca de 1 a 2 minutos. Aguarde..." -ForegroundColor Yellow
     
     $pythonUrl = "https://www.python.org/ftp/python/3.11.8/python-3.11.8-amd64.exe"
@@ -92,14 +110,14 @@ if ($LASTEXITCODE -ne 0 -or $pythonOutput -match "not found") {
     
     $pythonExe = "$env:USERPROFILE\AppData\Local\Programs\Python\Python311\python.exe"
     if (-not (Test-Path $pythonExe)) {
-        Write-Host "ERRO CRITICO: A instalacao automatica do Python falhou." -ForegroundColor Red
+        Write-Host "ERRO CRITICO: A instalacao automatica do Python 3.11 falhou." -ForegroundColor Red
         Write-Host "Por favor, baixe manualmente em python.org" -ForegroundColor Red
         exit
     }
     Write-Host "Python 3.11 instalado com sucesso!" -ForegroundColor Green
 }
 
-Write-Host "[1/4] Criando ambiente virtual isolado..." -ForegroundColor Green
+Write-Host "[1/4] Criando ambiente virtual isolado com Python 3.11..." -ForegroundColor Green
 & $pythonExe -m venv venv
 
 if (-not (Test-Path "venv\Scripts\python.exe")) {
@@ -107,10 +125,20 @@ if (-not (Test-Path "venv\Scripts\python.exe")) {
     exit
 }
 
-Write-Host "[2/4] Baixando as dependencias do projeto (Isso pode demorar um pouco)..." -ForegroundColor Green
+Write-Host "[2/4] Baixando as dependencias otimizadas para ($gpuType)..." -ForegroundColor Green
 $pipCmd = ".\venv\Scripts\python.exe"
 & $pipCmd -m pip install --upgrade pip --quiet
-& $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile nvidia-cublas-cu12 nvidia-cudnn-cu12 PyQt6 pynput pillow onnxruntime-directml
+
+if ($gpuType -eq "nvidia") {
+    Write-Host "Baixando drivers de aceleracao NVIDIA CUDA..." -ForegroundColor Cyan
+    & $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile nvidia-cublas-cu12 nvidia-cudnn-cu12 PyQt6 pynput pillow
+} elseif ($gpuType -eq "amd") {
+    Write-Host "Baixando drivers de aceleracao AMD DirectML..." -ForegroundColor Cyan
+    & $pipCmd -m pip install SpeechRecognition PyAudio soundfile PyQt6 pynput pillow onnxruntime-directml optimum[onnxruntime] torch
+} else {
+    Write-Host "Baixando pacote leve otimizado para CPU..." -ForegroundColor Cyan
+    & $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile PyQt6 pynput pillow
+}
 
 Write-Host "[3/4] Criando arquivos de execucao invisivel..." -ForegroundColor Green
 $VBS_PATH = "$InstallDir\launcher.vbs"

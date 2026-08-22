@@ -179,6 +179,7 @@ class OverlayWindow(QWidget):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setCursor(Qt.CursorShape.SizeAllCursor)
         
         self.width_ = 450
         self.height_ = 150
@@ -214,20 +215,21 @@ class OverlayWindow(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._is_dragging = True
-            self._drag_pos = event.globalPosition().toPoint() - self.pos()
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
 
     def mouseMoveEvent(self, event):
-        if self._is_dragging:
+        if self._is_dragging and event.buttons() & Qt.MouseButton.LeftButton:
             self.move(event.globalPosition().toPoint() - self._drag_pos)
             event.accept()
 
     def mouseReleaseEvent(self, event):
-        self._is_dragging = False
-        config["overlay_x"] = self.x()
-        config["overlay_y"] = self.y()
-        save_config()
-        event.accept()
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._is_dragging = False
+            config["overlay_x"] = self.x()
+            config["overlay_y"] = self.y()
+            save_config()
+            event.accept()
 
     def update_animation(self):
         if not self._is_dragging and self.isVisible():
@@ -237,6 +239,11 @@ class OverlayWindow(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Fundo quase invisível para capturar o clique do mouse em toda a extensão
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(15, 15, 25, 40))
+        painter.drawRoundedRect(self.rect(), 12, 12)
         
         if is_transcribing:
             painter.setPen(Qt.PenStyle.NoPen)
