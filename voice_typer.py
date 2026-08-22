@@ -124,7 +124,7 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 
-APP_VERSION = "0.02"
+APP_VERSION = "0.03"
 
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
@@ -160,17 +160,24 @@ class MicTestManager:
         try:
             if self.p is None:
                 self.p = pyaudio.PyAudio()
+            
+            try:
+                info = self.p.get_device_info_by_index(mic_index)
+                sample_rate = int(info.get("defaultSampleRate", 44100))
+            except Exception:
+                sample_rate = 16000
+
             self.stream = self.p.open(
                 format=pyaudio.paInt16,
                 channels=1,
-                rate=16000,
+                rate=sample_rate,
                 input=True,
                 input_device_index=mic_index,
                 frames_per_buffer=1024,
                 stream_callback=self._audio_callback
             )
             self.stream.start_stream()
-            print(f"[DEBUG MIC] Teste assincrono ativado no mic {mic_index}", flush=True)
+            print(f"[DEBUG MIC] Teste assincrono ativado no mic {mic_index} (Taxa: {sample_rate}Hz)", flush=True)
         except Exception as e:
             print(f"[DEBUG MIC] Nao foi possivel abrir mic {mic_index}: {e}", flush=True)
             signals.mic_level_signal.emit(0)

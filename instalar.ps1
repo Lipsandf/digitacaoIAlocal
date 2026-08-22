@@ -206,8 +206,8 @@ $wshell = New-Object -ComObject WScript.Shell
 # Atalho no Startup (Inicializar com o PC)
 $shortcutPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Digitador_IA.lnk"
 $shortcut = $wshell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = "wscript.exe"
-$shortcut.Arguments = "`"$VBS_PATH`""
+$shortcut.TargetPath = "$InstallDir\venv\Scripts\pythonw.exe"
+$shortcut.Arguments = "`"$InstallDir\voice_typer.py`""
 $shortcut.IconLocation = "$InstallDir\icon.ico"
 $shortcut.WorkingDirectory = "$InstallDir"
 $shortcut.Save()
@@ -216,8 +216,8 @@ $shortcut.Save()
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutDesktopPath = "$desktopPath\Digitador_IA.lnk"
 $shortcutDesktop = $wshell.CreateShortcut($shortcutDesktopPath)
-$shortcutDesktop.TargetPath = "wscript.exe"
-$shortcutDesktop.Arguments = "`"$VBS_PATH`""
+$shortcutDesktop.TargetPath = "$InstallDir\venv\Scripts\pythonw.exe"
+$shortcutDesktop.Arguments = "`"$InstallDir\voice_typer.py`""
 $shortcutDesktop.IconLocation = "$InstallDir\icon.ico"
 $shortcutDesktop.WorkingDirectory = "$InstallDir"
 $shortcutDesktop.Save()
