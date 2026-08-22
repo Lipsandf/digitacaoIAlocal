@@ -610,7 +610,13 @@ def load_ai_model():
         winsound.Beep(1000, 100)
         winsound.Beep(1500, 100)
     except Exception as e:
-        print("Erro ao carregar IA:", e)
+        print("Erro ao carregar IA via CUDA. Tentando CPU...", e)
+        try:
+            model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
+            winsound.Beep(800, 100)
+            winsound.Beep(1200, 100)
+        except Exception as e2:
+            print("Erro critico ao carregar IA:", e2)
 
 def main():
     global app_instance, overlay_instance, main_window
