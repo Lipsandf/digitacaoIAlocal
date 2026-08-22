@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QLabel, QPushButton, QStackedWidget, 
                             QComboBox, QProgressBar, QTextEdit, QScrollArea, QFrame,
                             QSystemTrayIcon, QMenu, QDialog)
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QAction, QIcon, QPixmap, QFont, QKeySequence
 
 # --- CORREÇÃO DA PLACA DE VÍDEO (cublas64_12.dll) ---
