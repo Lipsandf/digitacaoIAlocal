@@ -13,6 +13,12 @@ from pynput import keyboard as pynput_keyboard
 import pyaudio
 import sys
 
+# Previne crashes de 'print()' quando o app roda via pythonw.exe (atalho sem terminal)
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QLabel, QPushButton, QStackedWidget, 
                             QComboBox, QProgressBar, QTextEdit, QScrollArea, QFrame,
