@@ -180,6 +180,12 @@ class MicTestThread(QThread):
                     time.sleep(0.5)
                     continue
 
+            # Se o microfone atual já falhou anteriormente, ignora a tentativa para não travar
+            if getattr(self, 'failed_mic', None) == target_mic:
+                signals.mic_level_signal.emit(0)
+                time.sleep(0.5)
+                continue
+
             # Abre o stream de áudio e mantém aberto
             if stream is None:
                 try:
@@ -187,8 +193,11 @@ class MicTestThread(QThread):
                     stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, 
                                     input=True, input_device_index=target_mic, frames_per_buffer=1024)
                     print(f"[DEBUG MIC] Stream aberto com sucesso!", flush=True)
+                    self.failed_mic = None
                 except Exception as e:
                     print(f"[DEBUG MIC] Falha ao abrir stream no mic {target_mic}: {e}", flush=True)
+                    self.failed_mic = target_mic
+                    signals.mic_level_signal.emit(0)
                     time.sleep(0.5)
                     continue
 
@@ -674,11 +683,22 @@ class MainWindow(QMainWindow):
     def change_mic(self):
         new_idx = self.mic_combo.currentData()
         if new_idx is not None:
-            print(f"[DEBUG MIC] Selecionado microfone no combo (Indice: {new_idx})", flush=True)
             config["mic_index"] = new_idx
-            if hasattr(self, 'mic_worker'):
-                self.mic_worker.set_mic_index(new_idx)
             save_config()
+            
+            # Debounce: Aguarda 1 segundo sem alterações para aplicar a mudança no áudio
+            if not hasattr(self, '_mic_debounce_timer'):
+                self._mic_debounce_timer = QTimer(self)
+                self._mic_debounce_timer.setSingleShot(True)
+                self._mic_debounce_timer.timeout.connect(self._apply_mic_change)
+            
+            self._mic_debounce_timer.start(1000)
+
+    def _apply_mic_change(self):
+        target_idx = config.get("mic_index", None)
+        if target_idx is not None and hasattr(self, 'mic_worker'):
+            print(f"[DEBUG MIC] Aplicando troca de microfone com seguranca para indice: {target_idx}", flush=True)
+            self.mic_worker.set_mic_index(target_idx)
 
     def capture_shortcut(self):
         dlg = ShortcutDialog(self)
