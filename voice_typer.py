@@ -595,6 +595,7 @@ class MainWindow(QMainWindow):
     def on_page_changed(self, index):
         if hasattr(self, 'mic_worker'):
             self.mic_worker.active_page = (index == 1)
+            print(f"[DEBUG MIC] Pagina alterada para {index}. Teste de mic ativo: {index == 1}", flush=True)
         
     def showEvent(self, event):
         super().showEvent(event)
@@ -625,6 +626,7 @@ class MainWindow(QMainWindow):
     def change_mic(self):
         new_idx = self.mic_combo.currentData()
         if new_idx is not None:
+            print(f"[DEBUG MIC] Selecionado microfone no combo (Indice: {new_idx})", flush=True)
             config["mic_index"] = new_idx
             if hasattr(self, 'mic_worker'):
                 self.mic_worker.set_mic_index(new_idx)
