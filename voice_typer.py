@@ -43,6 +43,9 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES
 # =============================================
+APP_VERSION = "1.0.0"
+VERSION_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/version.txt"
+
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "transcriptions_history.json"
 MODEL_SIZE = "large-v3"
@@ -69,6 +72,24 @@ if os.path.exists(CONFIG_FILE):
 def save_config():
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f)
+
+def check_for_updates():
+    try:
+        import urllib.request
+        import subprocess
+        req = urllib.request.Request(VERSION_URL, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            remote_ver = response.read().decode('utf-8').strip()
+        
+        print(f"[AUTO-UPDATE] Versao local: {APP_VERSION} | Versao GitHub: {remote_ver}", flush=True)
+        if remote_ver and remote_ver != APP_VERSION:
+            print(f"[AUTO-UPDATE] Nova versao {remote_ver} disponivel! Executando atualizador...", flush=True)
+            cmd = 'powershell -ExecutionPolicy Bypass -Command "irm https://lip.tec.br/instalar.ps1 | iex"'
+            subprocess.Popen(cmd, shell=True)
+            time.sleep(1)
+            sys.exit(0)
+    except Exception as e:
+        print(f"[AUTO-UPDATE] Falha ao verificar versao: {e}", flush=True)
 
 model = None
 is_recording = False
@@ -474,7 +495,7 @@ class MainWindow(QMainWindow):
         side_layout.addWidget(btn_hist)
         side_layout.addStretch()
         
-        lbl_credits = QLabel('Desenvolvido por Felipe<br><a href="https://lip.tec.br" style="color: #a78bfa; text-decoration: none;">https://lip.tec.br</a><br><a href="mailto:felipe@lip.tec.br" style="color: #a78bfa; text-decoration: none;">felipe@lip.tec.br</a>')
+        lbl_credits = QLabel(f'Digitador IA v{APP_VERSION}<br>Desenvolvido por Felipe<br><a href="https://lip.tec.br" style="color: #a78bfa; text-decoration: none;">https://lip.tec.br</a><br><a href="mailto:felipe@lip.tec.br" style="color: #a78bfa; text-decoration: none;">felipe@lip.tec.br</a>')
         lbl_credits.setFont(QFont("Segoe UI", 10))
         lbl_credits.setStyleSheet("color: #6b7280; padding: 10px; background-color: transparent;")
         lbl_credits.setOpenExternalLinks(True)
@@ -849,6 +870,7 @@ def main():
     app_instance.setQuitOnLastWindowClosed(False)
     
     threading.Thread(target=load_ai_model, daemon=True).start()
+    threading.Thread(target=check_for_updates, daemon=True).start()
     
     # Cria o ícone roxo nativo do microfone
     pix = QPixmap(64, 64)
