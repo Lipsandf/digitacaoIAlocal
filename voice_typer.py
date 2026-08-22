@@ -678,6 +678,15 @@ def load_ai_model():
                 if "insufficient" in err_msg or "driver" in err_msg:
                     cuda_driver_warning = True
 
+    # Check DirectML for AMD/Intel GPUs
+    try:
+        import onnxruntime as ort
+        providers = ort.get_available_providers()
+        if "DmlExecutionProvider" in providers:
+            print("Detectado suporte DirectML (GPU AMD/Intel/DirectX 12 pronta)!")
+    except Exception:
+        pass
+
     # Fallback para CPU
     print("Caindo para o modo CPU...")
     try:

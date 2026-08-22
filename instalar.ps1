@@ -110,7 +110,7 @@ if (-not (Test-Path "venv\Scripts\python.exe")) {
 Write-Host "[2/4] Baixando as dependencias do projeto (Isso pode demorar um pouco)..." -ForegroundColor Green
 $pipCmd = ".\venv\Scripts\python.exe"
 & $pipCmd -m pip install --upgrade pip --quiet
-& $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile nvidia-cublas-cu12 nvidia-cudnn-cu12 PyQt6 pynput pillow
+& $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile nvidia-cublas-cu12 nvidia-cudnn-cu12 PyQt6 pynput pillow onnxruntime-directml
 
 Write-Host "[3/4] Criando arquivos de execucao invisivel..." -ForegroundColor Green
 $VBS_PATH = "$InstallDir\launcher.vbs"
