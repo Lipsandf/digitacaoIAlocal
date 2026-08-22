@@ -79,7 +79,8 @@ def check_for_updates(manual=False):
     try:
         import urllib.request
         import subprocess
-        req = urllib.request.Request(VERSION_URL, headers={'User-Agent': 'Mozilla/5.0'})
+        url = f"{VERSION_URL}?t={int(time.time())}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'})
         with urllib.request.urlopen(req, timeout=5) as response:
             remote_ver = response.read().decode('utf-8').strip()
         
