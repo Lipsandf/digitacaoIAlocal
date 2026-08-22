@@ -43,7 +43,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES
 # =============================================
-APP_VERSION = "1.0"
+APP_VERSION = "0.1"
 VERSION_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/version.txt"
 
 CONFIG_FILE = "config.json"
