@@ -183,11 +183,12 @@ if ($gpuType -eq "nvidia") {
     & $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile PyQt6 pynput pillow
 }
 
-Write-Host "[3/4] Baixando/Verificando o modelo de IA ($modelChoiceText) no seu PC..." -ForegroundColor Green
-Write-Host "Verificando se o modelo ja esta no disco ou baixando arquivos necessarios. Aguarde..." -ForegroundColor Yellow
-
-# Executa o script Python com feedback explicito do caminho de cache
-& $pipCmd -c "from faster_whisper.utils import download_model; import os; print('Iniciando checagem do modelo $modelChoiceText...'); p = download_model('$modelChoiceText'); print('SUCESSO: Modelo IA pronto no disco em:', p)"
+Write-Host "[3/4] Baixando o modelo de IA ($modelChoiceText) no seu PC..." -ForegroundColor Green
+$env:PYTHONUNBUFFERED = "1"
+& $pipCmd "$InstallDir\download_model.py" $modelChoiceText
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "AVISO: Houve um problema ao baixar a IA antecipadamente." -ForegroundColor Yellow
+}
 
 Write-Host "[4/4] Criando arquivos de execucao invisivel..." -ForegroundColor Green
 $VBS_PATH = "$InstallDir\launcher.vbs"
