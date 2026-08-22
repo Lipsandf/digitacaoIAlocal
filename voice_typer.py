@@ -75,8 +75,39 @@ hotkey_listener = None
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
     hide_overlay = pyqtSignal()
+    mic_level_signal = pyqtSignal(int)
 
 signals = WorkerSignals()
+
+class MicTestThread(QThread):
+    def __init__(self):
+        super().__init__()
+        self.running = True
+        self.active_page = False
+        self.current_mic_index = None
+
+    def run(self):
+        while self.running:
+            if self.active_page and not is_recording and self.current_mic_index is not None:
+                try:
+                    p = pyaudio.PyAudio()
+                    stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, 
+                                    input=True, input_device_index=self.current_mic_index, frames_per_buffer=1024)
+                    data = stream.read(1024, exception_on_overflow=False)
+                    stream.stop_stream()
+                    stream.close()
+                    p.terminate()
+                    
+                    import numpy as np
+                    samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+                    rms = float(np.sqrt(np.mean(samples ** 2)))
+                    val = min(100, int((rms / 4000.0) * 100))
+                    signals.mic_level_signal.emit(val)
+                except:
+                    signals.mic_level_signal.emit(0)
+            else:
+                signals.mic_level_signal.emit(0)
+            time.sleep(0.12)
 
 # =============================================
 # GRAVAÇÃO E TRANSCRIÇÃO
@@ -480,11 +511,18 @@ class MainWindow(QMainWindow):
         btn_hist.clicked.connect(lambda: [self.stack.setCurrentIndex(3), self.load_history()])
         btn_hide.clicked.connect(self.hide)
 
-        self.mic_timer = QTimer(self)
-        self.mic_timer.timeout.connect(self.update_mic_test)
-        self.mic_timer.start(100)
-
         signals.history_updated.connect(self.load_history)
+        signals.mic_level_signal.connect(self.mic_prog.setValue)
+        
+        self.mic_worker = MicTestThread()
+        self.mic_worker.current_mic_index = config.get("mic_index", None)
+        self.mic_worker.start()
+        
+        self.stack.currentChanged.connect(self.on_page_changed)
+
+    def on_page_changed(self, index):
+        if hasattr(self, 'mic_worker'):
+            self.mic_worker.active_page = (index == 1)
         
     def showEvent(self, event):
         super().showEvent(event)
@@ -515,17 +553,10 @@ class MainWindow(QMainWindow):
     def change_mic(self):
         new_idx = self.mic_combo.currentData()
         if new_idx is not None:
-            self._is_changing_mic = True
-            if hasattr(self, 'mic_timer'):
-                self.mic_timer.stop()
             config["mic_index"] = new_idx
+            if hasattr(self, 'mic_worker'):
+                self.mic_worker.current_mic_index = new_idx
             save_config()
-            QTimer.singleShot(300, self._resume_mic_test)
-
-    def _resume_mic_test(self):
-        self._is_changing_mic = False
-        if hasattr(self, 'mic_timer'):
-            self.mic_timer.start(150)
 
     def capture_shortcut(self):
         dlg = ShortcutDialog(self)

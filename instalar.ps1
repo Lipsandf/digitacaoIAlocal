@@ -1,3 +1,4 @@
+$ProgressPreference = 'SilentlyContinue'
 Write-Host "=======================================================" -ForegroundColor Cyan
 Write-Host "         DIGITADOR IA (VOZ) - INSTALADOR               " -ForegroundColor Yellow
 Write-Host "=======================================================" -ForegroundColor Cyan
