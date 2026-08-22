@@ -108,121 +108,9 @@ hotkey_listener = None
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
     hide_overlay = pyqtSignal()
-    mic_level_signal = pyqtSignal(int)
     update_result_signal = pyqtSignal(str)
 
 signals = WorkerSignals()
-
-class MicTestThread(QThread):
-    def __init__(self):
-        super().__init__()
-        self.running = True
-        self.active_page = False
-        self.current_mic_index = None
-        self._lock = threading.Lock()
-
-    def set_mic_index(self, index):
-        with self._lock:
-            self.current_mic_index = index
-
-    def run(self):
-        p = None
-        stream = None
-        last_mic = None
-
-        while self.running:
-            if not self.active_page or is_recording or self.current_mic_index is None:
-                if stream is not None:
-                    try:
-                        stream.stop_stream()
-                        stream.close()
-                    except: pass
-                    stream = None
-                if p is not None:
-                    try: p.terminate()
-                    except: pass
-                    p = None
-                last_mic = None
-                signals.mic_level_signal.emit(0)
-                time.sleep(0.2)
-                continue
-
-            with self._lock:
-                target_mic = self.current_mic_index
-
-            # Se o microfone mudou, fecha o stream anterior suavemente
-            if last_mic != target_mic:
-                print(f"[DEBUG MIC] Trocando microfone de {last_mic} para {target_mic}...", flush=True)
-                if stream is not None:
-                    try:
-                        stream.stop_stream()
-                        stream.close()
-                        print("[DEBUG MIC] Stream antigo fechado.", flush=True)
-                    except Exception as e: print(f"[DEBUG MIC] Erro ao fechar stream: {e}", flush=True)
-                    stream = None
-                if p is not None:
-                    try: 
-                        p.terminate()
-                        print("[DEBUG MIC] PyAudio antigo finalizado.", flush=True)
-                    except Exception as e: print(f"[DEBUG MIC] Erro ao fechar PyAudio: {e}", flush=True)
-                    p = None
-                last_mic = target_mic
-                time.sleep(0.2)
-                continue
-
-            # Inicializa o PyAudio apenas uma vez
-            if p is None:
-                try:
-                    print(f"[DEBUG MIC] Inicializando PyAudio para mic {target_mic}...", flush=True)
-                    p = pyaudio.PyAudio()
-                except Exception as e:
-                    print(f"[DEBUG MIC] Erro ao criar PyAudio: {e}", flush=True)
-                    time.sleep(0.5)
-                    continue
-
-            # Se o microfone atual já falhou anteriormente, ignora a tentativa para não travar
-            if getattr(self, 'failed_mic', None) == target_mic:
-                signals.mic_level_signal.emit(0)
-                time.sleep(0.5)
-                continue
-
-            # Abre o stream de áudio e mantém aberto
-            if stream is None:
-                try:
-                    print(f"[DEBUG MIC] Abrindo stream de audio no indice {target_mic}...", flush=True)
-                    stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, 
-                                    input=True, input_device_index=target_mic, frames_per_buffer=1024)
-                    print(f"[DEBUG MIC] Stream aberto com sucesso!", flush=True)
-                    self.failed_mic = None
-                except Exception as e:
-                    print(f"[DEBUG MIC] Falha ao abrir stream no mic {target_mic}: {e}", flush=True)
-                    self.failed_mic = target_mic
-                    signals.mic_level_signal.emit(0)
-                    time.sleep(0.5)
-                    continue
-
-            # Lê os bytes do stream ativo
-            try:
-                data = stream.read(1024, exception_on_overflow=False)
-                import numpy as np
-                samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-                rms = float(np.sqrt(np.mean(samples ** 2)))
-                val = min(100, int((rms / 4000.0) * 100))
-                signals.mic_level_signal.emit(val)
-            except Exception:
-                signals.mic_level_signal.emit(0)
-                if stream is not None:
-                    try: stream.close()
-                    except: pass
-                    stream = None
-            time.sleep(0.05)
-
-        if stream is not None:
-            try: stream.close()
-            except: pass
-        if p is not None:
-            try: p.terminate()
-            except: pass
 
 # =============================================
 # GRAVAÇÃO E TRANSCRIÇÃO
@@ -568,7 +456,7 @@ class MainWindow(QMainWindow):
             if idx == config["mic_index"]:
                 self.mic_combo.setCurrentText(name)
                 
-        self.mic_combo.currentIndexChanged.connect(self.change_mic)
+        self.mic_combo.activated.connect(self.change_mic)
         l_mic.addWidget(self.mic_combo)
         
         l_mic.addWidget(QLabel("Teste de Áudio (Fale algo):"))
@@ -633,14 +521,7 @@ class MainWindow(QMainWindow):
         btn_hide.clicked.connect(self.hide)
 
         signals.history_updated.connect(self.load_history)
-        signals.mic_level_signal.connect(self.mic_prog.setValue)
         signals.update_result_signal.connect(self.update_result_handler)
-        
-        self.mic_worker = MicTestThread()
-        self.mic_worker.current_mic_index = config.get("mic_index", None)
-        self.mic_worker.start()
-        
-        self.stack.currentChanged.connect(self.on_page_changed)
 
     def manual_check_update(self):
         self.btn_version.setText("⏳ Verificando...")
@@ -685,20 +566,8 @@ class MainWindow(QMainWindow):
         if new_idx is not None:
             config["mic_index"] = new_idx
             save_config()
-            
-            # Debounce: Aguarda 1 segundo sem alterações para aplicar a mudança no áudio
-            if not hasattr(self, '_mic_debounce_timer'):
-                self._mic_debounce_timer = QTimer(self)
-                self._mic_debounce_timer.setSingleShot(True)
-                self._mic_debounce_timer.timeout.connect(self._apply_mic_change)
-            
-            self._mic_debounce_timer.start(1000)
-
-    def _apply_mic_change(self):
-        target_idx = config.get("mic_index", None)
-        if target_idx is not None and hasattr(self, 'mic_worker'):
-            print(f"[DEBUG MIC] Aplicando troca de microfone com seguranca para indice: {target_idx}", flush=True)
-            self.mic_worker.set_mic_index(target_idx)
+            try: winsound.Beep(1200, 80)
+            except: pass
 
     def capture_shortcut(self):
         dlg = ShortcutDialog(self)
