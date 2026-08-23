@@ -13,6 +13,14 @@ def log_uncaught_exception(exctype, value, tb):
 
 sys.excepthook = log_uncaught_exception
 
+# Oculta a janela preta do terminal automaticamente (Win32 FreeConsole)
+if "--debug" not in sys.argv:
+    try:
+        import ctypes
+        ctypes.windll.kernel32.FreeConsole()
+    except Exception:
+        pass
+
 # Força o diretório de trabalho a ser a pasta do aplicativo (corrige execuções via atalho/Windows)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR:
@@ -140,7 +148,7 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 
-APP_VERSION = "0.05"
+APP_VERSION = "0.06"
 
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
