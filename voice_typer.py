@@ -909,23 +909,8 @@ def main():
     except Exception:
         pass
 
-    SOCKET_KEY = "DigitadorIA_SingleInstance_App_Key"
     app_instance = QApplication(sys.argv)
     app_instance.setQuitOnLastWindowClosed(False)
-    
-    # Se o aplicativo já estiver rodando (ex: na bandeja), manda abrir a tela e encerra o processo duplicado
-    test_socket = QLocalSocket()
-    test_socket.connectToServer(SOCKET_KEY)
-    if test_socket.waitForConnected(400):
-        test_socket.write(b"SHOW")
-        test_socket.waitForBytesWritten(400)
-        test_socket.disconnectFromServer()
-        sys.exit(0)
-
-    # Cria o servidor de instância única
-    server = QLocalServer()
-    QLocalServer.removeServer(SOCKET_KEY)
-    server.listen(SOCKET_KEY)
     
     threading.Thread(target=load_ai_model, daemon=True).start()
     
@@ -951,16 +936,6 @@ def main():
 
     main_window = MainWindow()
     main_window.setWindowIcon(app_icon)
-
-    def handle_ipc_show():
-        client = server.nextPendingConnection()
-        if client:
-            client.waitForReadyRead(300)
-            client.disconnectFromServer()
-            main_window.showNormal()
-            main_window.activateWindow()
-            main_window.raise_()
-    server.newConnection.connect(handle_ipc_show)
     
     print("Criando Overlay", flush=True)
     overlay_instance = OverlayWindow()
