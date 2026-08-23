@@ -46,6 +46,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QSystemTrayIcon, QMenu, QDialog)
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QAction, QIcon, QPixmap, QFont, QKeySequence
+from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 
 # --- CORREÇÃO DA PLACA DE VÍDEO (cublas64_12.dll) ---
 try:
@@ -142,7 +143,7 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 
-APP_VERSION = "0.07"
+APP_VERSION = "0.08"
 
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
@@ -908,8 +909,23 @@ def main():
     except Exception:
         pass
 
+    SOCKET_KEY = "DigitadorIA_SingleInstance_App_Key"
     app_instance = QApplication(sys.argv)
     app_instance.setQuitOnLastWindowClosed(False)
+    
+    # Se o aplicativo já estiver rodando (ex: na bandeja), manda abrir a tela e encerra o processo duplicado
+    test_socket = QLocalSocket()
+    test_socket.connectToServer(SOCKET_KEY)
+    if test_socket.waitForConnected(400):
+        test_socket.write(b"SHOW")
+        test_socket.waitForBytesWritten(400)
+        test_socket.disconnectFromServer()
+        sys.exit(0)
+
+    # Cria o servidor de instância única
+    server = QLocalServer()
+    QLocalServer.removeServer(SOCKET_KEY)
+    server.listen(SOCKET_KEY)
     
     threading.Thread(target=load_ai_model, daemon=True).start()
     
@@ -935,6 +951,16 @@ def main():
 
     main_window = MainWindow()
     main_window.setWindowIcon(app_icon)
+
+    def handle_ipc_show():
+        client = server.nextPendingConnection()
+        if client:
+            client.waitForReadyRead(300)
+            client.disconnectFromServer()
+            main_window.showNormal()
+            main_window.activateWindow()
+            main_window.raise_()
+    server.newConnection.connect(handle_ipc_show)
     
     print("Criando Overlay", flush=True)
     overlay_instance = OverlayWindow()
