@@ -197,7 +197,7 @@ $wshell = New-Object -ComObject WScript.Shell
 # Atalho no Startup (Inicializar com o PC)
 $shortcutPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Digitador_IA.lnk"
 $shortcut = $wshell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = "$InstallDir\venv\Scripts\pythonw.exe"
+$shortcut.TargetPath = "$InstallDir\venv\Scripts\python.exe"
 $shortcut.Arguments = "`"$InstallDir\voice_typer.py`""
 $shortcut.IconLocation = "$InstallDir\icon.ico"
 $shortcut.WorkingDirectory = "$InstallDir"
@@ -207,18 +207,18 @@ $shortcut.Save()
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutDesktopPath = "$desktopPath\Digitador_IA.lnk"
 $shortcutDesktop = $wshell.CreateShortcut($shortcutDesktopPath)
-$shortcutDesktop.TargetPath = "$InstallDir\venv\Scripts\pythonw.exe"
+$shortcutDesktop.TargetPath = "$InstallDir\venv\Scripts\python.exe"
 $shortcutDesktop.Arguments = "`"$InstallDir\voice_typer.py`""
 $shortcutDesktop.IconLocation = "$InstallDir\icon.ico"
 $shortcutDesktop.WorkingDirectory = "$InstallDir"
 $shortcutDesktop.Save()
 
 # Arquivo .bat de inicialização direta
-$batContent = "@echo off`r`nstart `"`" `"$InstallDir\venv\Scripts\pythonw.exe`" `"$InstallDir\voice_typer.py`""
+$batContent = "@echo off`r`ncd /d `"$InstallDir`"`r`nstart `"`" /min `"$InstallDir\venv\Scripts\python.exe`" `"$InstallDir\voice_typer.py`""
 Set-Content -Path "$InstallDir\Iniciar_Digitador_IA.bat" -Value $batContent
 
 Write-Host "Iniciando o Digitador IA agora..." -ForegroundColor Green
-Start-Process -FilePath "$InstallDir\venv\Scripts\pythonw.exe" -ArgumentList "`"$InstallDir\voice_typer.py`"" -WorkingDirectory "$InstallDir"
+Start-Process -FilePath "$InstallDir\venv\Scripts\python.exe" -ArgumentList "`"$InstallDir\voice_typer.py`"" -WorkingDirectory "$InstallDir"
 
 Write-Host ""
 Write-Host "=======================================================" -ForegroundColor Cyan

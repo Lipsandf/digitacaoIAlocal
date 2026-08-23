@@ -1,5 +1,17 @@
 import os
 import sys
+import time
+import traceback
+
+def log_uncaught_exception(exctype, value, tb):
+    error_msg = "".join(traceback.format_exception(exctype, value, tb))
+    try:
+        with open("crash_debug.log", "a", encoding="utf-8") as f:
+            f.write(f"\n--- CRASH AT {time.ctime()} ---\n{error_msg}\n")
+    except: pass
+    sys.__excepthook__(exctype, value, tb)
+
+sys.excepthook = log_uncaught_exception
 
 # Força o diretório de trabalho a ser a pasta do aplicativo (corrige execuções via atalho/Windows)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -10,7 +22,6 @@ import site
 import json
 import threading
 import io
-import time
 import math
 import wave
 import ctypes
@@ -20,7 +31,6 @@ from ctypes import wintypes
 import winsound
 from pynput import keyboard as pynput_keyboard
 import pyaudio
-import sys
 
 # Previne crashes de 'print()' quando o app roda via pythonw.exe (atalho sem terminal)
 if sys.stdout is None:
