@@ -1,4 +1,11 @@
 import os
+import sys
+
+# Força o diretório de trabalho a ser a pasta do aplicativo (corrige execuções via atalho/Windows)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR:
+    os.chdir(BASE_DIR)
+
 import site
 import json
 import threading
@@ -123,7 +130,7 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 
-APP_VERSION = "0.04"
+APP_VERSION = "0.05"
 
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
