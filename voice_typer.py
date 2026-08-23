@@ -143,7 +143,7 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 
-APP_VERSION = "0.09"
+APP_VERSION = "0.10"
 
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
