@@ -912,7 +912,6 @@ def main():
     app_instance.setQuitOnLastWindowClosed(False)
     
     threading.Thread(target=load_ai_model, daemon=True).start()
-    threading.Thread(target=check_for_updates, daemon=True).start()
     
     # Cria o ícone roxo nativo do microfone
     pix = QPixmap(64, 64)
