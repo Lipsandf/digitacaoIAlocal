@@ -123,7 +123,7 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 
-APP_VERSION = "0.03"
+APP_VERSION = "0.04"
 
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
@@ -241,13 +241,34 @@ def transcribe_and_type(buffer, sample_rate):
         signals.hide_overlay.emit()
         return
     
+    raw_data = b''.join(buffer)
+    target_rate = 16000
+    
+    # Se a taxa de amostragem do microfone for diferente de 16000Hz (ex: 44100Hz ou 48000Hz),
+    # reamostra os dados para 16000Hz para que o Silero VAD e o Whisper reconheçam a voz!
+    if sample_rate != target_rate and len(raw_data) > 0:
+        try:
+            import numpy as np
+            samples = np.frombuffer(raw_data, dtype=np.int16)
+            if len(samples) > 0:
+                duration = len(samples) / float(sample_rate)
+                target_length = int(duration * target_rate)
+                orig_indices = np.linspace(0, len(samples) - 1, len(samples))
+                target_indices = np.linspace(0, len(samples) - 1, target_length)
+                resampled_samples = np.interp(target_indices, orig_indices, samples).astype(np.int16)
+                raw_data = resampled_samples.tobytes()
+                print(f"[DEBUG MIC] Audio reamostrado de {sample_rate}Hz para {target_rate}Hz com sucesso!", flush=True)
+                sample_rate = target_rate
+        except Exception as e_resample:
+            print(f"[DEBUG MIC] Erro ao reamostrar audio: {e_resample}", flush=True)
+
     buf = io.BytesIO()
     p = pyaudio.PyAudio()
     with wave.open(buf, 'wb') as wf:
         wf.setnchannels(1)
         wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
         wf.setframerate(sample_rate)
-        wf.writeframes(b''.join(buffer))
+        wf.writeframes(raw_data)
     buf.seek(0)
     p.terminate()
     
