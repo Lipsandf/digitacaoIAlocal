@@ -36,6 +36,14 @@ Durante a instalação, você escolhe o modelo ideal para seu uso:
 
 ## 🚀 Instalação Rápida (Recomendada)
 
+### 📦 Opção 1: Instalador Executável `.exe` (Visual Nativo do Windows)
+Baixe o instalador oficial, dê **2 cliques** e siga o assistente passo a passo:
+- [📥 **Download do Instalador_DigitadorIA.exe (Servidor Direto)**](https://lip.tec.br/instalador.exe)
+- [📦 **Download do Instalador_DigitadorIA.exe (GitHub)**](https://github.com/Lipsandf/digitacaoIAlocal/raw/main/Instalador_DigitadorIA.exe)
+
+---
+
+### 💻 Opção 2: Instalação via PowerShell
 Abra o seu **PowerShell** no Windows, cole o comando abaixo e pressione `Enter`:
 
 ```powershell
