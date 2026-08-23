@@ -143,7 +143,7 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 
-APP_VERSION = "0.08"
+APP_VERSION = "0.09"
 
 class WorkerSignals(QObject):
     history_updated = pyqtSignal()
@@ -560,9 +560,11 @@ class MainWindow(QMainWindow):
         l_tut.addWidget(info_tut)
         
         self.test_box = QTextEdit()
+        self.test_box.setFixedHeight(180)
         self.test_box.setPlaceholderText("Clique aqui e teste seu atalho e a digitação...")
         self.test_box.setStyleSheet("background-color: #1a1a2e; border: 1px solid #7c3aed; border-radius: 5px; font-size: 16px; padding: 10px;")
         l_tut.addWidget(self.test_box)
+        l_tut.addStretch()
         self.stack.addWidget(page_tut)
         
         page_mic = QWidget()
