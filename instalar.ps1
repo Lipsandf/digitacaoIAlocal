@@ -191,15 +191,6 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "AVISO: Houve um problema ao baixar a IA antecipadamente." -ForegroundColor Yellow
 }
 
-Write-Host "[4/4] Criando arquivos de execucao invisivel..." -ForegroundColor Green
-$VBS_PATH = "$InstallDir\launcher.vbs"
-$vbsContent = @"
-Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run chr(34) & "$InstallDir\venv\Scripts\pythonw.exe" & chr(34) & " " & chr(34) & "$InstallDir\voice_typer.py" & chr(34), 0, False
-Set WshShell = Nothing
-"@
-Set-Content -Path $VBS_PATH -Value $vbsContent
-
 Write-Host "[4/4] Adicionando o programa ao Windows..." -ForegroundColor Green
 $wshell = New-Object -ComObject WScript.Shell
 
@@ -222,8 +213,12 @@ $shortcutDesktop.IconLocation = "$InstallDir\icon.ico"
 $shortcutDesktop.WorkingDirectory = "$InstallDir"
 $shortcutDesktop.Save()
 
+# Arquivo .bat de inicialização direta
+$batContent = "@echo off`r`nstart `"`" `"$InstallDir\venv\Scripts\pythonw.exe`" `"$InstallDir\voice_typer.py`""
+Set-Content -Path "$InstallDir\Iniciar_Digitador_IA.bat" -Value $batContent
+
 Write-Host "Iniciando o Digitador IA agora..." -ForegroundColor Green
-Invoke-Item $VBS_PATH
+Start-Process -FilePath "$InstallDir\venv\Scripts\pythonw.exe" -ArgumentList "`"$InstallDir\voice_typer.py`"" -WorkingDirectory "$InstallDir"
 
 Write-Host ""
 Write-Host "=======================================================" -ForegroundColor Cyan
