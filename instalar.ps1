@@ -91,29 +91,43 @@ if ($aiChoice -eq "2") {
     $modelChoiceText = "large-v3"
 }
 
-$InstallDir = "$env:USERPROFILE\DigitadorIA"
+$InstallDir = "$env:ProgramFiles\DigitadorIA"
+$LegacyDir = "$env:USERPROFILE\DigitadorIA"
 Write-Host ""
-Write-Host "Iniciando instalacao em: $InstallDir" -ForegroundColor Cyan
-Write-Host "Ola! Baixando o codigo do Github..." -ForegroundColor Green
+Write-Host "Iniciando instalacao oficial em: $InstallDir" -ForegroundColor Cyan
 
 # Encerra processos antigos para liberar os arquivos
 Stop-Process -Name "wscript" -ErrorAction SilentlyContinue
 Stop-Process -Name "pythonw" -ErrorAction SilentlyContinue
+Stop-Process -Name "python" -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-} else {
-    # Apaga o conteudo interno para nao falhar se o terminal estiver aberto na pasta
-    Get-ChildItem -Path $InstallDir -Exclude "venv" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# Migração Inteligente da pasta antiga se existir
+if ((Test-Path $LegacyDir) -and ($LegacyDir -ne $InstallDir)) {
+    Write-Host "Detectada instalacao anterior em: $LegacyDir" -ForegroundColor Yellow
+    Write-Host "Migrando ambiente Python e arquivos para $InstallDir..." -ForegroundColor Yellow
+    $oldVenv = "$LegacyDir\venv"
+    $newVenv = "$InstallDir\venv"
+    if ((Test-Path $oldVenv) -and (-not (Test-Path $newVenv))) {
+        Move-Item -Path $oldVenv -Destination $newVenv -Force -ErrorAction SilentlyContinue
+        Write-Host "  -> Ambiente virtual migrado instantaneamente!" -ForegroundColor Green
+    }
+    # Copia configurações existentes
+    Get-ChildItem -Path $LegacyDir -Filter "*.json" -ErrorAction SilentlyContinue | Copy-Item -Destination $InstallDir -Force
+    Get-ChildItem -Path $LegacyDir -Filter "*.txt" -ErrorAction SilentlyContinue | Copy-Item -Destination $InstallDir -Force
+}
+
+Write-Host "Baixando o codigo mais recente do Github..." -ForegroundColor Green
 $zipPath = "$env:TEMP\DigitadorIA.zip"
 Invoke-WebRequest -Uri "https://github.com/Lipsandf/digitacaoIAlocal/archive/refs/heads/main.zip" -OutFile $zipPath
 Expand-Archive -Path $zipPath -DestinationPath $env:TEMP -Force
-Move-Item -Path "$env:TEMP\digitacaoIAlocal-main\*" -Destination $InstallDir -Force
-Remove-Item -Path $zipPath -Force
-Remove-Item -Path "$env:TEMP\digitacaoIAlocal-main" -Recurse -Force
+Copy-Item -Path "$env:TEMP\digitacaoIAlocal-main\*" -Destination $InstallDir -Recurse -Force
+Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:TEMP\digitacaoIAlocal-main" -Recurse -Force -ErrorAction SilentlyContinue
 
 Set-Location $InstallDir
 
