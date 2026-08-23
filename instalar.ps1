@@ -191,43 +191,36 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "AVISO: Houve um problema ao baixar a IA antecipadamente." -ForegroundColor Yellow
 }
 
-Write-Host "[4/4] Criando inicializador invisivel e atalhos..." -ForegroundColor Green
-$VBS_PATH = "$InstallDir\launcher.vbs"
-$vbsContent = @"
-Set WshShell = CreateObject("WScript.Shell")
-WshShell.CurrentDirectory = "$InstallDir"
-WshShell.Run chr(34) & "$InstallDir\venv\Scripts\pythonw.exe" & chr(34) & " " & chr(34) & "$InstallDir\voice_typer.py" & chr(34), 0, False
-Set WshShell = Nothing
-"@
-Set-Content -Path $VBS_PATH -Value $vbsContent
-
+Write-Host "[4/4] Adicionando o programa ao Windows..." -ForegroundColor Green
 $wshell = New-Object -ComObject WScript.Shell
 
 # Atalho no Startup (Inicializar com o PC)
 $shortcutPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Digitador_IA.lnk"
 $shortcut = $wshell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = "wscript.exe"
-$shortcut.Arguments = "`"$VBS_PATH`""
+$shortcut.TargetPath = "$InstallDir\venv\Scripts\pythonw.exe"
+$shortcut.Arguments = "`"$InstallDir\voice_typer.py`""
 $shortcut.IconLocation = "$InstallDir\icon.ico"
 $shortcut.WorkingDirectory = "$InstallDir"
+$shortcut.WindowStyle = 1
 $shortcut.Save()
 
 # Atalho na Area de Trabalho
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutDesktopPath = "$desktopPath\Digitador_IA.lnk"
 $shortcutDesktop = $wshell.CreateShortcut($shortcutDesktopPath)
-$shortcutDesktop.TargetPath = "wscript.exe"
-$shortcutDesktop.Arguments = "`"$VBS_PATH`""
+$shortcutDesktop.TargetPath = "$InstallDir\venv\Scripts\pythonw.exe"
+$shortcutDesktop.Arguments = "`"$InstallDir\voice_typer.py`""
 $shortcutDesktop.IconLocation = "$InstallDir\icon.ico"
 $shortcutDesktop.WorkingDirectory = "$InstallDir"
+$shortcutDesktop.WindowStyle = 1
 $shortcutDesktop.Save()
 
 # Arquivo .bat de inicialização direta
-$batContent = "@echo off`r`ncd /d `"$InstallDir`"`r`nwscript.exe `"$VBS_PATH`""
+$batContent = "@echo off`r`ncd /d `"$InstallDir`"`r`nstart `"`" `"$InstallDir\venv\Scripts\pythonw.exe`" `"$InstallDir\voice_typer.py`""
 Set-Content -Path "$InstallDir\Iniciar_Digitador_IA.bat" -Value $batContent
 
 Write-Host "Iniciando o Digitador IA agora..." -ForegroundColor Green
-Start-Process -FilePath "wscript.exe" -ArgumentList "`"$VBS_PATH`"" -WorkingDirectory "$InstallDir"
+Start-Process -FilePath "$InstallDir\venv\Scripts\pythonw.exe" -ArgumentList "`"$InstallDir\voice_typer.py`"" -WorkingDirectory "$InstallDir"
 
 Write-Host ""
 Write-Host "=======================================================" -ForegroundColor Cyan
