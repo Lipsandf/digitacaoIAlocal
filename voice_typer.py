@@ -70,7 +70,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES (PERSISTÊNCIA DUPLA)
 # =============================================
-APP_VERSION = "0.21"
+APP_VERSION = "0.22"
 VERSION_URL = "https://lip.tec.br/version.txt"
 RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
 GITHUB_API_URL = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/voice_typer.py"
@@ -594,7 +594,7 @@ def transcribe_and_type(buffer, sample_rate):
         signals.hide_overlay.emit()
 
 # =============================================
-# OVERLAY: ONDAS COM FAKE GLOW + BADGE DE MOTOR
+# OVERLAY: ONDAS HARMÔNICAS NEON (ESTILO SIRI / LASER GLOW)
 # =============================================
 class OverlayWindow(QWidget):
     def __init__(self):
@@ -603,8 +603,8 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setCursor(Qt.CursorShape.SizeAllCursor)
         
-        self.width_ = 450
-        self.height_ = 150
+        self.width_ = 520
+        self.height_ = 140
         self.resize(self.width_, self.height_)
         
         if config["overlay_x"] != -1:
@@ -618,20 +618,11 @@ class OverlayWindow(QWidget):
         self._is_dragging = False
         self._drag_pos = None
         self.frame_count = 0
+        self.smoothed_amp = 5.0
         
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_animation)
-        self.timer.start(30)
-        
-        self.colors = [
-            QColor(255, 0, 0, 200),
-            QColor(255, 127, 0, 200),
-            QColor(255, 255, 0, 200),
-            QColor(0, 255, 0, 200),
-            QColor(0, 255, 255, 200),
-            QColor(0, 0, 255, 200),
-            QColor(139, 0, 255, 200)
-        ]
+        self.timer.start(25)  # 40 FPS super fluido
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -661,71 +652,123 @@ class OverlayWindow(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(15, 15, 25, 40))
-        painter.drawRoundedRect(self.rect(), 12, 12)
+        w = self.width()
+        h = self.height()
+        cy = h / 2.0
         
+        # Fundo Translúcido com efeito Vidro Escuro e borda suave
+        bg_grad = QLinearGradient(0, 0, 0, h)
+        bg_grad.setColorAt(0.0, QColor(10, 10, 22, 215))
+        bg_grad.setColorAt(1.0, QColor(16, 14, 30, 235))
+        painter.setPen(QPen(QColor(120, 100, 240, 50), 1))
+        painter.setBrush(bg_grad)
+        painter.drawRoundedRect(4, 4, w - 8, h - 8, 16, 16)
+        
+        # Badge de Motor Ativo no topo
         engine = config.get("engine", "local")
         is_groq = (engine == "groq" and bool(config.get("groq_api_key", "").strip()))
-        
-        badge_text = "⚡ GROQ NUVEM" if is_groq else "🖥️ IA LOCAL"
+        badge_text = "⚡ GROQ CLOUD" if is_groq else "🖥️ IA LOCAL"
         badge_color = QColor("#0284c7") if is_groq else QColor("#7c3aed")
         
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(badge_color)
-        painter.drawRoundedRect(self.width_ - 125, 10, 115, 22, 11, 11)
-        
+        painter.drawRoundedRect(w - 130, 12, 115, 22, 11, 11)
         painter.setPen(QColor("#ffffff"))
         painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        painter.drawText(self.width_ - 125, 10, 115, 22, Qt.AlignmentFlag.AlignCenter, badge_text)
+        painter.drawText(w - 130, 12, 115, 22, Qt.AlignmentFlag.AlignCenter, badge_text)
         
+        # Status de áudio no canto esquerdo
+        painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         if is_transcribing:
+            painter.setPen(QColor("#38bdf8" if is_groq else "#c4b5fd"))
+            dots = "." * ((self.frame_count // 8) % 4)
+            painter.drawText(18, 28, f"⚡ Transcrevendo áudio{dots}")
+        else:
+            painter.setPen(QColor("#34d399"))
+            painter.drawText(18, 28, "🎙️ Ouvindo voz... Fale agora")
+
+        # Tela de Transcrição com Pulso Radiante
+        if is_transcribing:
+            pulse = math.sin(self.frame_count * 0.15) * 8
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(26, 26, 46, 220))
-            painter.drawRoundedRect(self.rect(), 10, 10)
+            painter.setBrush(QColor(56, 189, 248, 40) if is_groq else QColor(167, 139, 250, 40))
+            painter.drawEllipse(int(w/2 - 24 - pulse/2), int(cy - 24 - pulse/2), int(48 + pulse), int(48 + pulse))
             
-            painter.setBrush(badge_color)
-            painter.drawRoundedRect(self.width_ - 125, 10, 115, 22, 11, 11)
-            painter.setPen(QColor("#ffffff"))
-            painter.drawText(self.width_ - 125, 10, 115, 22, Qt.AlignmentFlag.AlignCenter, badge_text)
-            
-            painter.setPen(QColor("#a78bfa"))
-            painter.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-            dots = "." * ((self.frame_count // 10) % 4)
-            label_trans = f"Transcrevendo ({'Groq' if is_groq else 'Local'}){dots}"
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, label_trans)
-            
-            angle = (self.frame_count * 10) % 360
-            painter.setPen(QPen(QColor("#38bdf8" if is_groq else "#a78bfa"), 4))
-            painter.drawArc(self.width_ // 2 - 140, self.height_ // 2 - 15, 30, 30, -angle * 16, 120 * 16)
+            painter.setPen(QPen(QColor("#38bdf8" if is_groq else "#a78bfa"), 3.5))
+            painter.setBrush(Qt.BrushStyle.BrushStyle.NoBrush)
+            angle = (self.frame_count * 12) % 360
+            painter.drawArc(int(w/2 - 16), int(cy - 16), 32, 32, -angle * 16, 240 * 16)
             return
-            
+
+        # FÍSICA E SUAVIZAÇÃO DA AMPLITUDE DE VOZ (LERP)
         vol = current_rms if is_recording else 0
-        amp = max(2.0, min(60.0, vol / 40.0))
-        if not is_recording: amp = 1.0
-
-        cy = self.height_ / 2
-        points_count = 100
-        step = self.width_ / points_count
-
-        for c_idx, color in enumerate(self.colors):
-            path = QPainterPath()
-            path.moveTo(0, cy)
+        target_amp = 6.0
+        if is_recording:
+            vol_adj = max(0, vol - 40)
+            target_amp = 6.0 + min(55.0, (vol_adj / 35.0) * 1.5)
             
-            for i in range(1, points_count + 1):
-                x = i * step
-                phase = self.frame_count * 0.1 + (i * 0.08) + c_idx
-                y_offset = math.sin(phase) * amp * math.sin(i * 3.1415 / points_count)
-                y_offset += math.sin(phase * 2.5) * (amp * 0.3)
-                y = cy + y_offset
-                path.lineTo(x, y)
+        self.smoothed_amp = self.smoothed_amp * 0.72 + target_amp * 0.28
+        amp = self.smoothed_amp
+
+        # ONDAS HARMÔNICAS MULTICAMADAS ESTILO SILK / LASER NEON
+        t = self.frame_count * 0.04
+        points = 120
+        dx = (w - 30) / float(points - 1)
+        
+        # 4 Feixes Harmônicos com Cores Vibrantes (Magenta, Ciano, Violeta, Laranja Solar)
+        wave_ribbons = [
+            {"color": QColor(255, 30, 140), "freq": 2.2, "speed": 1.4, "sub_freq": 4.5, "amp_mult": 1.0, "sub_amp": 0.35, "phase_shift": 0.0},
+            {"color": QColor(0, 220, 255),  "freq": 1.8, "speed": -1.1, "sub_freq": 3.8, "amp_mult": 0.85, "sub_amp": 0.4, "phase_shift": 1.8},
+            {"color": QColor(168, 85, 247), "freq": 2.6, "speed": 0.9, "sub_freq": 5.2, "amp_mult": 0.75, "sub_amp": 0.3, "phase_shift": 3.2},
+            {"color": QColor(255, 140, 0),  "freq": 3.0, "speed": -1.6, "sub_freq": 6.0, "amp_mult": 0.65, "sub_amp": 0.25, "phase_shift": 4.5},
+        ]
+        
+        for ribbon in wave_ribbons:
+            base_col = ribbon["color"]
             
-            painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 50), 6))
-            painter.drawPath(path)
-            painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 150), 3))
-            painter.drawPath(path)
-            painter.setPen(QPen(QColor(255, 255, 255, 200), 1))
-            painter.drawPath(path)
+            # Para cada fita, desenhamos 3 filamentos paralelos (Strands) para efeito Silk Waves
+            for strand_i in range(3):
+                strand_offset = (strand_i - 1) * 0.18
+                strand_alpha = 190 if strand_i == 1 else 115
+                
+                path = QPainterPath()
+                first = True
+                
+                for i in range(points):
+                    x = 15 + i * dx
+                    norm_x = float(i) / (points - 1)
+                    
+                    # Envelope de Sino Suave (Transição orgânica para zero nas pontas)
+                    envelope = math.sin(norm_x * math.pi) ** 1.8
+                    
+                    # Equação de Harmônicos Compostos
+                    p1 = (norm_x * ribbon["freq"] * 2.0 * math.pi) + (t * ribbon["speed"]) + ribbon["phase_shift"] + strand_offset
+                    p2 = (norm_x * ribbon["sub_freq"] * 2.0 * math.pi) - (t * ribbon["speed"] * 1.3)
+                    
+                    y_disp = (math.sin(p1) * ribbon["amp_mult"] + math.sin(p2) * ribbon["sub_amp"]) * amp * envelope
+                    y = cy + y_disp
+                    
+                    if first:
+                        path.moveTo(x, y)
+                        first = False
+                    else:
+                        path.lineTo(x, y)
+                
+                # Pass 1: Aura Neon Difusa Larga
+                if strand_i == 1:
+                    painter.setPen(QPen(QColor(base_col.red(), base_col.green(), base_col.blue(), 35), 9))
+                    painter.drawPath(path)
+                    painter.setPen(QPen(QColor(base_col.red(), base_col.green(), base_col.blue(), 75), 4.5))
+                    painter.drawPath(path)
+                
+                # Pass 2: Filamento Principal Vibrante
+                painter.setPen(QPen(QColor(base_col.red(), base_col.green(), base_col.blue(), strand_alpha), 1.8))
+                painter.drawPath(path)
+                
+                # Pass 3: Núcleo Laser Branco (Glow Core nos picos da voz)
+                if strand_i == 1 and is_recording and vol > 70:
+                    painter.setPen(QPen(QColor(255, 255, 255, 160), 1.0))
+                    painter.drawPath(path)
 
 # =============================================
 # CAPTURADOR DE ATALHO (Dialog)
