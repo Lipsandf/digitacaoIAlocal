@@ -70,7 +70,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES (PERSISTÊNCIA DUPLA)
 # =============================================
-APP_VERSION = "0.22"
+APP_VERSION = "0.23"
 VERSION_URL = "https://lip.tec.br/version.txt"
 RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
 GITHUB_API_URL = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/voice_typer.py"
@@ -644,7 +644,7 @@ class OverlayWindow(QWidget):
             event.accept()
 
     def update_animation(self):
-        if not self._is_dragging and self.isVisible():
+        if not self._is_dragging:
             self.frame_count += 1
             self.update()
 
@@ -695,19 +695,21 @@ class OverlayWindow(QWidget):
             painter.drawEllipse(int(w/2 - 24 - pulse/2), int(cy - 24 - pulse/2), int(48 + pulse), int(48 + pulse))
             
             painter.setPen(QPen(QColor("#38bdf8" if is_groq else "#a78bfa"), 3.5))
-            painter.setBrush(Qt.BrushStyle.BrushStyle.NoBrush)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
             angle = (self.frame_count * 12) % 360
             painter.drawArc(int(w/2 - 16), int(cy - 16), 32, 32, -angle * 16, 240 * 16)
             return
 
         # FÍSICA E SUAVIZAÇÃO DA AMPLITUDE DE VOZ (LERP)
         vol = current_rms if is_recording else 0
-        target_amp = 6.0
+        base_idle = 18.0 + math.sin(self.frame_count * 0.08) * 3.0
         if is_recording:
-            vol_adj = max(0, vol - 40)
-            target_amp = 6.0 + min(55.0, (vol_adj / 35.0) * 1.5)
+            vol_boost = min(42.0, (vol / 25.0))
+            target_amp = base_idle + vol_boost
+        else:
+            target_amp = base_idle
             
-        self.smoothed_amp = self.smoothed_amp * 0.72 + target_amp * 0.28
+        self.smoothed_amp = self.smoothed_amp * 0.65 + target_amp * 0.35
         amp = self.smoothed_amp
 
         # ONDAS HARMÔNICAS MULTICAMADAS ESTILO SILK / LASER NEON
