@@ -112,16 +112,10 @@ icacls "$InstallDir" /grant "Users:(OI)(CI)F" /T /C /Q 2>&1 | Out-Null
 icacls "$InstallDir" /grant "Todos:(OI)(CI)F" /T /C /Q 2>&1 | Out-Null
 icacls "$InstallDir" /grant "Everyone:(OI)(CI)F" /T /C /Q 2>&1 | Out-Null
 
-# Migração Inteligente de pastas anteriores se existirem
+# Migração Inteligente de pastas anteriores se existirem (preserva historico e configuracoes)
 foreach ($leg in $LegacyDirs) {
     if ((Test-Path $leg) -and ($leg -ne $InstallDir)) {
         Write-Host "Detectada instalacao anterior em: $leg" -ForegroundColor Yellow
-        $oldVenv = "$leg\venv"
-        $newVenv = "$InstallDir\venv"
-        if ((Test-Path $oldVenv) -and (-not (Test-Path $newVenv))) {
-            Move-Item -Path $oldVenv -Destination $newVenv -Force -ErrorAction SilentlyContinue
-            Write-Host "  -> Ambiente virtual migrado instantaneamente!" -ForegroundColor Green
-        }
         Get-ChildItem -Path $leg -Filter "*.json" -ErrorAction SilentlyContinue | Copy-Item -Destination $InstallDir -Force
         Get-ChildItem -Path $leg -Filter "*.txt" -ErrorAction SilentlyContinue | Copy-Item -Destination $InstallDir -Force
     }
@@ -207,8 +201,18 @@ if ($LASTEXITCODE -ne 0 -or $pythonOutput -notmatch "3\.11") {
     Write-Host "Python 3.11 instalado com sucesso!" -ForegroundColor Green
 }
 
-Write-Host "[1/4] Criando ambiente virtual isolado com Python 3.11..." -ForegroundColor Green
-& $pythonExe -m venv venv
+Write-Host "[1/4] Verificando e criando ambiente virtual isolado com Python 3.11..." -ForegroundColor Green
+if (Test-Path "venv\Scripts\python.exe") {
+    $testResult = & ".\venv\Scripts\python.exe" -c "import sys; print('OK')" 2>&1
+    if ($testResult -notmatch "OK") {
+        Write-Host "Ambiente virtual anterior corrompido. Recriando..." -ForegroundColor Yellow
+        Remove-Item -Path "venv" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+if (-not (Test-Path "venv\Scripts\python.exe")) {
+    & $pythonExe -m venv venv
+}
 
 if (-not (Test-Path "venv\Scripts\python.exe")) {
     Write-Host "ERRO CRITICO: Falha ao criar a Virtual Environment do Python!" -ForegroundColor Red
@@ -240,23 +244,33 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "[4/4] Criando inicializador invisivel e atalhos..." -ForegroundColor Green
 $VBS_PATH = "$InstallDir\launcher.vbs"
 $vbsContent = @"
+Set fso = CreateObject("Scripting.FileSystemObject")
+scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.CurrentDirectory = "$InstallDir"
-WshShell.Run chr(34) & "$InstallDir\venv\Scripts\python.exe" & chr(34) & " " & chr(34) & "$InstallDir\voice_typer.py" & chr(34), 0, False
+WshShell.CurrentDirectory = scriptDir
+pyExe = scriptDir & "\venv\Scripts\pythonw.exe"
+If Not fso.FileExists(pyExe) Then pyExe = scriptDir & "\venv\Scripts\python.exe"
+WshShell.Run chr(34) & pyExe & chr(34) & " " & chr(34) & scriptDir & "\voice_typer.py" & chr(34), 0, False
 Set WshShell = Nothing
 "@
-Set-Content -Path $VBS_PATH -Value $vbsContent
+Set-Content -Path $VBS_PATH -Value $vbsContent -Encoding ascii
 
 $wshell = New-Object -ComObject WScript.Shell
 
+# Limpa atalhos obsoletos ou quebrados do Startup
+$startupDir = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
+if (Test-Path "$startupDir\DigitadorPorVoz.vbs") { Remove-Item -Path "$startupDir\DigitadorPorVoz.vbs" -Force -ErrorAction SilentlyContinue }
+if (Test-Path "$startupDir\Digitador_IA.lnk") { Remove-Item -Path "$startupDir\Digitador_IA.lnk" -Force -ErrorAction SilentlyContinue }
+
 # Atalho no Startup (Inicializar com o PC)
-$shortcutPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Digitador_IA.lnk"
+$shortcutPath = "$startupDir\Digitador_IA.lnk"
 $shortcut = $wshell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = "wscript.exe"
 $shortcut.Arguments = "`"$VBS_PATH`""
 $shortcut.IconLocation = "$InstallDir\icon.ico"
 $shortcut.WorkingDirectory = "$InstallDir"
 $shortcut.Save()
+
 
 # Atalho na Area de Trabalho
 $desktopPath = [Environment]::GetFolderPath("Desktop")

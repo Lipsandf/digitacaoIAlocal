@@ -70,7 +70,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES (PERSISTÊNCIA DUPLA)
 # =============================================
-APP_VERSION = "0.24"
+APP_VERSION = "0.25"
 VERSION_URL = "https://lip.tec.br/version.txt"
 RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
 GITHUB_API_URL = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/voice_typer.py"

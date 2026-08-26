@@ -88,9 +88,13 @@ icacls "$TargetDir" /grant "Everyone:(OI)(CI)F" /T /C /Q 2>&1 | Out-Null
 
 # 7. Recria o launcher.vbs e reabre o aplicativo obrigatoriamente
 $vbsContent = @"
+Set fso = CreateObject("Scripting.FileSystemObject")
+scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.CurrentDirectory = "$TargetDir"
-WshShell.Run chr(34) & "$TargetDir\venv\Scripts\python.exe" & chr(34) & " " & chr(34) & "$TargetDir\voice_typer.py" & chr(34), 0, False
+WshShell.CurrentDirectory = scriptDir
+pyExe = scriptDir & "\venv\Scripts\pythonw.exe"
+If Not fso.FileExists(pyExe) Then pyExe = scriptDir & "\venv\Scripts\python.exe"
+WshShell.Run chr(34) & pyExe & chr(34) & " " & chr(34) & scriptDir & "\voice_typer.py" & chr(34), 0, False
 Set WshShell = Nothing
 "@
 Set-Content -Path "$TargetDir\launcher.vbs" -Value $vbsContent -Encoding ascii -Force

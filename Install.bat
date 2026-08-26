@@ -18,11 +18,18 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
-echo [1/5] Criando ambiente virtual isolado...
+echo [1/5] Verificando e criando ambiente virtual isolado...
+if exist "venv" (
+    venv\Scripts\python.exe -c "import sys" >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo Ambiente virtual anterior corrompido. Recriando venv...
+        rmdir /s /q "venv"
+    )
+)
 if not exist "venv" (
     python -m venv venv
 )
-echo Ambiente virtual criado com sucesso!
+echo Ambiente virtual configurado com sucesso!
 echo.
 
 echo [2/5] Baixando as dependencias do projeto (Isso pode demorar um pouco)...
@@ -37,23 +44,31 @@ set "SCRIPT_DIR=%~dp0"
 set "VBS_PATH=%SCRIPT_DIR%launcher.vbs"
 
 (
+echo Set fso = CreateObject^("Scripting.FileSystemObject"^)
+echo scriptDir = fso.GetParentFolderName^(WScript.ScriptFullName^)
 echo Set WshShell = CreateObject^("WScript.Shell"^)
-echo WshShell.Run chr^(34^) ^& "%SCRIPT_DIR%venv\Scripts\pythonw.exe" ^& chr^(34^) ^& " " ^& chr^(34^) ^& "%SCRIPT_DIR%voice_typer.py" ^& chr^(34^), 0, False
+echo WshShell.CurrentDirectory = scriptDir
+echo pyExe = scriptDir ^& "\venv\Scripts\pythonw.exe"
+echo If Not fso.FileExists^(pyExe^) Then pyExe = scriptDir ^& "\venv\Scripts\python.exe"
+echo WshShell.Run chr^(34^) ^& pyExe ^& chr^(34^) ^& " " ^& chr^(34^) ^& scriptDir ^& "\voice_typer.py" ^& chr^(34^), 0, False
 echo Set WshShell = Nothing
 ) > "%VBS_PATH%"
 echo Lancador invisivel criado!
 echo.
 
 echo [4/5] Adicionando o programa a inicializacao do Windows...
-:: Usa PowerShell para criar o atalho
 set "STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
+if exist "%STARTUP_FOLDER%\DigitadorPorVoz.vbs" del /f /q "%STARTUP_FOLDER%\DigitadorPorVoz.vbs"
+if exist "%STARTUP_FOLDER%\Digitador_IA.lnk" del /f /q "%STARTUP_FOLDER%\Digitador_IA.lnk"
+
 set "SHORTCUT_PATH=%STARTUP_FOLDER%\Digitador_IA.lnk"
-powershell -Command "$wshell = New-Object -ComObject WScript.Shell; $shortcut = $wshell.CreateShortcut('%SHORTCUT_PATH%'); $shortcut.TargetPath = 'wscript.exe'; $shortcut.Arguments = '""%VBS_PATH%""'; $shortcut.IconLocation = '%SCRIPT_DIR%venv\Scripts\pythonw.exe'; $shortcut.WorkingDirectory = '%SCRIPT_DIR%'; $shortcut.Save()"
+powershell -NoProfile -Command "$wshell = New-Object -ComObject WScript.Shell; $shortcut = $wshell.CreateShortcut('%SHORTCUT_PATH%'); $shortcut.TargetPath = 'wscript.exe'; $shortcut.Arguments = '""%VBS_PATH%""'; $shortcut.WorkingDirectory = '%SCRIPT_DIR%'; $shortcut.Save()"
 echo Atalho de inicializacao adicionado!
 echo.
 
 echo [5/5] Iniciando o Digitador IA agora...
 wscript.exe "%VBS_PATH%"
+
 
 color 0A
 echo.
