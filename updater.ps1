@@ -99,14 +99,39 @@ Set WshShell = Nothing
 "@
 Set-Content -Path "$TargetDir\launcher.vbs" -Value $vbsContent -Encoding ascii -Force
 
+# Limpa atalhos legados do Startup
+$startupFolders = @(
+    "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup",
+    "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Startup"
+)
+$legacyStartupFiles = @(
+    "DigitadorPorVoz.vbs", "DigitadorPorVoz.lnk", "DigitadorPorVoz.bat",
+    "Digitador_IA.vbs", "Digitador IA.lnk", "Digitador IA.vbs",
+    "DigitadorIA.lnk", "DigitadorIA.vbs", "voice_typer.lnk", "voice_typer.vbs"
+)
+foreach ($sf in $startupFolders) {
+    if (Test-Path $sf) {
+        foreach ($lf in $legacyStartupFiles) {
+            $tf = Join-Path $sf $lf
+            if (Test-Path $tf) {
+                Remove-Item -Path $tf -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
+# Atualiza atalho do Startup
+$wshell = New-Object -ComObject WScript.Shell
+$userStartup = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
+$shortcutPath = "$userStartup\Digitador_IA.lnk"
+$wscriptExe = "$env:SystemRoot\System32\wscript.exe"
+if (-not (Test-Path $wscriptExe)) { $wscriptExe = "wscript.exe" }
+$shortcut = $wshell.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $wscriptExe
+$shortcut.Arguments = "`"$TargetDir\launcher.vbs`""
+$shortcut.IconLocation = "$TargetDir\icon.ico"
+$shortcut.WorkingDirectory = "$TargetDir"
+$shortcut.Save()
+
 # Dispara o aplicativo de forma desacoplada
-$pythonExe = "$TargetDir\venv\Scripts\pythonw.exe"
-if (-not (Test-Path $pythonExe)) {
-    $pythonExe = "$TargetDir\venv\Scripts\python.exe"
-}
-if (Test-Path $pythonExe) {
-    Start-Process -FilePath $pythonExe -ArgumentList "`"$TargetDir\voice_typer.py`"" -WorkingDirectory "$TargetDir"
-} else {
-    $wscriptExe = "$env:SystemRoot\System32\wscript.exe"
-    Start-Process -FilePath $wscriptExe -ArgumentList "`"$TargetDir\launcher.vbs`"" -WorkingDirectory "$TargetDir"
-}
+Start-Process -FilePath $wscriptExe -ArgumentList "`"$TargetDir\launcher.vbs`"" -WorkingDirectory "$TargetDir"

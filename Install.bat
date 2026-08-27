@@ -59,7 +59,12 @@ echo.
 echo [4/5] Adicionando o programa a inicializacao do Windows...
 set "STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 if exist "%STARTUP_FOLDER%\DigitadorPorVoz.vbs" del /f /q "%STARTUP_FOLDER%\DigitadorPorVoz.vbs"
+if exist "%STARTUP_FOLDER%\DigitadorPorVoz.lnk" del /f /q "%STARTUP_FOLDER%\DigitadorPorVoz.lnk"
+if exist "%STARTUP_FOLDER%\Digitador_IA.vbs" del /f /q "%STARTUP_FOLDER%\Digitador_IA.vbs"
 if exist "%STARTUP_FOLDER%\Digitador_IA.lnk" del /f /q "%STARTUP_FOLDER%\Digitador_IA.lnk"
+if exist "%STARTUP_FOLDER%\Digitador IA.lnk" del /f /q "%STARTUP_FOLDER%\Digitador IA.lnk"
+if exist "%STARTUP_FOLDER%\DigitadorIA.lnk" del /f /q "%STARTUP_FOLDER%\DigitadorIA.lnk"
+if exist "%STARTUP_FOLDER%\voice_typer.lnk" del /f /q "%STARTUP_FOLDER%\voice_typer.lnk"
 
 set "SHORTCUT_PATH=%STARTUP_FOLDER%\Digitador_IA.lnk"
 powershell -NoProfile -Command "$wshell = New-Object -ComObject WScript.Shell; $shortcut = $wshell.CreateShortcut('%SHORTCUT_PATH%'); $shortcut.TargetPath = 'wscript.exe'; $shortcut.Arguments = '""%VBS_PATH%""'; $shortcut.WorkingDirectory = '%SCRIPT_DIR%'; $shortcut.Save()"

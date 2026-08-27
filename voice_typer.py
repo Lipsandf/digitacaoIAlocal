@@ -3,20 +3,43 @@ import sys
 import time
 import traceback
 
-def log_uncaught_exception(exctype, value, tb):
-    error_msg = "".join(traceback.format_exception(exctype, value, tb))
-    try:
-        with open("crash_debug.log", "a", encoding="utf-8") as f:
-            f.write(f"\n--- CRASH AT {time.ctime()} ---\n{error_msg}\n")
-    except: pass
-    sys.__excepthook__(exctype, value, tb)
-
-sys.excepthook = log_uncaught_exception
+# Previne crashes de 'print()' quando o app roda via pythonw.exe (atalho sem terminal)
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
 # Força o diretório de trabalho a ser a pasta do aplicativo
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR:
-    os.chdir(BASE_DIR)
+    try:
+        os.chdir(BASE_DIR)
+    except Exception:
+        pass
+
+def log_uncaught_exception(exctype, value, tb):
+    error_msg = "".join(traceback.format_exception(exctype, value, tb))
+    try:
+        log_path = os.path.join(BASE_DIR, "crash_debug.log") if BASE_DIR else "crash_debug.log"
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"\n--- CRASH AT {time.ctime()} ---\n{error_msg}\n")
+    except Exception:
+        pass
+    try:
+        if sys.__excepthook__:
+            sys.__excepthook__(exctype, value, tb)
+    except Exception:
+        pass
+
+sys.excepthook = log_uncaught_exception
+
+try:
+    import faulthandler
+    crash_log = os.path.join(BASE_DIR, "crash_debug.log") if BASE_DIR else "crash_debug.log"
+    _fh_file = open(crash_log, "a", encoding="utf-8")
+    faulthandler.enable(file=_fh_file)
+except Exception:
+    pass
 
 import site
 import json
@@ -26,8 +49,6 @@ import math
 import wave
 import struct
 import ctypes
-import faulthandler
-faulthandler.enable()
 from ctypes import wintypes
 import winsound
 import urllib.request
@@ -39,11 +60,13 @@ from datetime import datetime
 from pynput import keyboard as pynput_keyboard
 import pyaudio
 
-# Previne crashes de 'print()' quando o app roda via pythonw.exe (atalho sem terminal)
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w", encoding="utf-8")
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+def play_beep(freq, duration):
+    def _beep():
+        try:
+            winsound.Beep(freq, duration)
+        except Exception:
+            pass
+    threading.Thread(target=_beep, daemon=True).start()
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QLabel, QPushButton, QStackedWidget, 
@@ -70,7 +93,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES (PERSISTÊNCIA DUPLA)
 # =============================================
-APP_VERSION = "0.25"
+APP_VERSION = "0.26"
 VERSION_URL = "https://lip.tec.br/version.txt"
 RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
 GITHUB_API_URL = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/voice_typer.py"
@@ -157,6 +180,7 @@ class WorkerSignals(QObject):
     engine_changed = pyqtSignal(str)
     quota_updated = pyqtSignal(dict)
     groq_test_result = pyqtSignal(bool, str)
+    toggle_recording_signal = pyqtSignal()
 
 signals = WorkerSignals()
 
@@ -472,7 +496,7 @@ def transcribe_and_type(buffer, sample_rate):
     if engine == "local" and model is None:
         is_transcribing = False
         signals.hide_overlay.emit()
-        winsound.Beep(400, 200)
+        play_beep(400, 200)
         return
     
     raw_data = b''.join(buffer)
@@ -508,7 +532,7 @@ def transcribe_and_type(buffer, sample_rate):
     text = ""
     
     try:
-        winsound.Beep(800, 80)
+        play_beep(800, 80)
         
         # --- 1. MODO GROQ CLOUD ---
         if engine == "groq" and groq_key:
@@ -529,7 +553,7 @@ def transcribe_and_type(buffer, sample_rate):
                     signals.quota_updated.emit(res["quota"])
             else:
                 print(f"[GROQ ERROR] {res.get('error')}. Tentando fallback local...", flush=True)
-                winsound.Beep(500, 150)
+                play_beep(500, 150)
                 if model is not None:
                     segments, _ = model.transcribe(
                         buf, beam_size=5, language="pt",
@@ -1341,6 +1365,7 @@ class MainWindow(QMainWindow):
         signals.engine_changed.connect(self.update_engine_ui)
         signals.quota_updated.connect(self.render_quota_ui)
         signals.groq_test_result.connect(self.on_groq_test_finished)
+        signals.toggle_recording_signal.connect(self.toggle_recording)
         
         self.mic_tester = MicTestManager()
         self.stack.currentChanged.connect(self.on_page_changed)
@@ -1572,7 +1597,7 @@ class MainWindow(QMainWindow):
             
         try:
             hotkey_listener = pynput_keyboard.GlobalHotKeys({
-                pynput_shortcut: self.toggle_recording
+                pynput_shortcut: lambda: signals.toggle_recording_signal.emit()
             })
             hotkey_listener.start()
         except Exception as e:
@@ -1581,8 +1606,8 @@ class MainWindow(QMainWindow):
     def toggle_recording(self):
         global is_recording, is_transcribing, overlay_instance, update_required
         if update_required:
-            winsound.Beep(400, 200)
-            winsound.Beep(300, 200)
+            play_beep(400, 200)
+            play_beep(300, 200)
             print("[AUTO-UPDATE] Uso bloqueado: atualização obrigatória pendente.", flush=True)
             threading.Thread(target=lambda: check_for_updates(auto_force=True), daemon=True).start()
             return
@@ -1590,7 +1615,7 @@ class MainWindow(QMainWindow):
         if not is_recording:
             is_recording = True
             is_transcribing = False
-            winsound.Beep(1500, 150)
+            play_beep(1500, 150)
             overlay_instance.show()
             if hasattr(self, 'btn_mic_test_toggle'):
                 self.btn_mic_test_toggle.setText("⏹️ Parar Gravação")
@@ -1599,7 +1624,7 @@ class MainWindow(QMainWindow):
         else:
             is_recording = False
             is_transcribing = True
-            winsound.Beep(1000, 150)
+            play_beep(1000, 150)
             if hasattr(self, 'btn_mic_test_toggle'):
                 self.btn_mic_test_toggle.setText("🎤 Gravar Teste")
                 self.btn_mic_test_toggle.setStyleSheet("background-color: #7c3aed; color: white; border-radius: 5px; padding: 6px 14px; font-weight: bold;")
@@ -1695,24 +1720,24 @@ def load_ai_model():
     # Tenta CUDA FP16
     try:
         model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="float16")
-        winsound.Beep(1000, 100)
-        winsound.Beep(1500, 100)
+        play_beep(1000, 100)
+        play_beep(1500, 100)
         print("Carregado na GPU NVIDIA via CUDA (float16)!")
         return
     except Exception as e:
         # Tenta CUDA INT8
         try:
             model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="int8")
-            winsound.Beep(1000, 100)
-            winsound.Beep(1500, 100)
+            play_beep(1000, 100)
+            play_beep(1500, 100)
             print("Carregado na GPU NVIDIA via CUDA (Modo INT8)!")
             return
         except Exception as e_int8:
             # Tenta CUDA FLOAT32
             try:
                 model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="float32")
-                winsound.Beep(1000, 100)
-                winsound.Beep(1500, 100)
+                play_beep(1000, 100)
+                play_beep(1500, 100)
                 print("Carregado na GPU NVIDIA via CUDA (Modo FLOAT32)!")
                 return
             except Exception as e_f32:
@@ -1728,13 +1753,13 @@ def load_ai_model():
     
     try:
         model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=smart_threads)
-        winsound.Beep(800, 100)
-        winsound.Beep(1200, 100)
+        play_beep(800, 100)
+        play_beep(1200, 100)
     except Exception as e2:
         try:
             model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="float32", cpu_threads=smart_threads)
-            winsound.Beep(800, 100)
-            winsound.Beep(1200, 100)
+            play_beep(800, 100)
+            play_beep(1200, 100)
         except Exception as e3:
             print("Falha total na CPU:", e3)
 

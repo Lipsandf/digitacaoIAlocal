@@ -24,18 +24,41 @@ if ($choice -eq "2") {
 
     # 2. Apaga Atalhos (Startup, Área de Trabalho em todas as variações)
     Write-Host "[2/5] Removendo atalhos do sistema e Area de Trabalho..." -ForegroundColor Yellow
-    $shortcuts = @(
-        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Digitador_IA.lnk",
-        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Digitador IA.lnk",
+    $startupFolders = @(
+        "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup",
+        "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Startup"
+    )
+    $legacyStartupFiles = @(
+        "DigitadorPorVoz.vbs", "DigitadorPorVoz.lnk", "DigitadorPorVoz.bat",
+        "Digitador_IA.vbs", "Digitador_IA.lnk", "Digitador IA.lnk", "Digitador IA.vbs",
+        "DigitadorIA.lnk", "DigitadorIA.vbs", "voice_typer.lnk", "voice_typer.vbs"
+    )
+    foreach ($sf in $startupFolders) {
+        if (Test-Path $sf) {
+            foreach ($lf in $legacyStartupFiles) {
+                $targetFile = Join-Path $sf $lf
+                if (Test-Path $targetFile) {
+                    Remove-Item -Path $targetFile -Force -ErrorAction SilentlyContinue
+                    Write-Host "  -> Removido atalho antigo: $targetFile" -ForegroundColor Cyan
+                }
+            }
+        }
+    }
+
+    $desktopShortcuts = @(
         "$([Environment]::GetFolderPath('Desktop'))\Digitador IA.lnk",
         "$([Environment]::GetFolderPath('Desktop'))\Digitador_IA.lnk",
         "$env:USERPROFILE\Desktop\Digitador IA.lnk",
-        "$env:USERPROFILE\Area de Trabalho\Digitador IA.lnk"
+        "$env:USERPROFILE\Desktop\Digitador_IA.lnk",
+        "$env:USERPROFILE\Area de Trabalho\Digitador IA.lnk",
+        "$env:USERPROFILE\Area de Trabalho\Digitador_IA.lnk",
+        "$env:PUBLIC\Desktop\Digitador IA.lnk",
+        "$env:PUBLIC\Desktop\Digitador_IA.lnk"
     )
-    foreach ($s in $shortcuts) {
+    foreach ($s in $desktopShortcuts) {
         if (Test-Path $s) {
             Remove-Item -Path $s -Force -ErrorAction SilentlyContinue
-            Write-Host "  -> Removido atalho: $s" -ForegroundColor Cyan
+            Write-Host "  -> Removido atalho da Área de Trabalho: $s" -ForegroundColor Cyan
         }
     }
 
@@ -50,11 +73,17 @@ if ($choice -eq "2") {
     }
 
     # 4. Apaga a pasta principal de instalação e o ambiente virtual (venv)
-    Write-Host "[4/5] Apagando pasta de instalacao e venv ($env:USERPROFILE\DigitadorIA)..." -ForegroundColor Yellow
-    $InstallDir = "$env:USERPROFILE\DigitadorIA"
-    if (Test-Path $InstallDir) {
-        Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host "  -> Pasta do programa e venv totalmente removidas." -ForegroundColor Green
+    Write-Host "[4/5] Apagando pastas de instalacao e venv..." -ForegroundColor Yellow
+    $AllInstallDirs = @(
+        "$env:ProgramFiles\DigitadorIA",
+        "$env:LOCALAPPDATA\DigitadorIA",
+        "$env:USERPROFILE\DigitadorIA"
+    )
+    foreach ($d in $AllInstallDirs) {
+        if (Test-Path $d) {
+            Remove-Item -Path $d -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "  -> Pasta removida: $d" -ForegroundColor Green
+        }
     }
 
     # 5. Apaga arquivos temporários de instalação no TEMP
@@ -257,26 +286,61 @@ Set-Content -Path $VBS_PATH -Value $vbsContent -Encoding ascii
 
 $wshell = New-Object -ComObject WScript.Shell
 
-# Limpa atalhos obsoletos ou quebrados do Startup
-$startupDir = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
-if (Test-Path "$startupDir\DigitadorPorVoz.vbs") { Remove-Item -Path "$startupDir\DigitadorPorVoz.vbs" -Force -ErrorAction SilentlyContinue }
-if (Test-Path "$startupDir\Digitador_IA.lnk") { Remove-Item -Path "$startupDir\Digitador_IA.lnk" -Force -ErrorAction SilentlyContinue }
+# Limpa TODOS os atalhos obsoletos ou quebrados do Startup (Usuário atual e Todos os Usuários)
+$startupFolders = @(
+    "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup",
+    "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Startup"
+)
+$legacyStartupFiles = @(
+    "DigitadorPorVoz.vbs", "DigitadorPorVoz.lnk", "DigitadorPorVoz.bat",
+    "Digitador_IA.vbs", "Digitador_IA.lnk", "Digitador IA.lnk", "Digitador IA.vbs",
+    "DigitadorIA.lnk", "DigitadorIA.vbs", "voice_typer.lnk", "voice_typer.vbs"
+)
+foreach ($sf in $startupFolders) {
+    if (Test-Path $sf) {
+        foreach ($lf in $legacyStartupFiles) {
+            $targetFile = Join-Path $sf $lf
+            if (Test-Path $targetFile) {
+                Remove-Item -Path $targetFile -Force -ErrorAction SilentlyContinue
+                Write-Host "  -> Removido atalho antigo de inicializacao: $targetFile" -ForegroundColor Cyan
+            }
+        }
+    }
+}
+
+# Remove entradas antigas no Registro Run se existirem
+$regPaths = @(
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
+)
+foreach ($rp in $regPaths) {
+    if (Test-Path $rp) {
+        Get-ItemProperty -Path $rp -ErrorAction SilentlyContinue | Get-Member -MemberType NoteProperty | ForEach-Object {
+            if ($_.Name -like "*Digitador*" -or $_.Name -like "*VoiceTyper*") {
+                Remove-ItemProperty -Path $rp -Name $_.Name -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
 
 # Atalho no Startup (Inicializar com o PC)
-$shortcutPath = "$startupDir\Digitador_IA.lnk"
+$userStartup = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
+$shortcutPath = "$userStartup\Digitador_IA.lnk"
+$wscriptExe = "$env:SystemRoot\System32\wscript.exe"
+if (-not (Test-Path $wscriptExe)) { $wscriptExe = "wscript.exe" }
+
 $shortcut = $wshell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = "wscript.exe"
+$shortcut.TargetPath = $wscriptExe
 $shortcut.Arguments = "`"$VBS_PATH`""
 $shortcut.IconLocation = "$InstallDir\icon.ico"
 $shortcut.WorkingDirectory = "$InstallDir"
 $shortcut.Save()
 
-
 # Atalho na Area de Trabalho
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutDesktopPath = "$desktopPath\Digitador_IA.lnk"
 $shortcutDesktop = $wshell.CreateShortcut($shortcutDesktopPath)
-$shortcutDesktop.TargetPath = "wscript.exe"
+$shortcutDesktop.TargetPath = $wscriptExe
 $shortcutDesktop.Arguments = "`"$VBS_PATH`""
 $shortcutDesktop.IconLocation = "$InstallDir\icon.ico"
 $shortcutDesktop.WorkingDirectory = "$InstallDir"
@@ -287,7 +351,7 @@ $batContent = "@echo off`r`ncd /d `"$InstallDir`"`r`nwscript.exe `"$VBS_PATH`""
 Set-Content -Path "$InstallDir\Iniciar_Digitador_IA.bat" -Value $batContent
 
 Write-Host "Iniciando o Digitador IA agora..." -ForegroundColor Green
-Start-Process -FilePath "wscript.exe" -ArgumentList "`"$VBS_PATH`"" -WorkingDirectory "$InstallDir"
+Start-Process -FilePath $wscriptExe -ArgumentList "`"$VBS_PATH`"" -WorkingDirectory "$InstallDir"
 
 Write-Host ""
 Write-Host "=======================================================" -ForegroundColor Cyan
