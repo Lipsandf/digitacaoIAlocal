@@ -93,7 +93,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES (PERSISTÊNCIA DUPLA)
 # =============================================
-APP_VERSION = "0.29"
+APP_VERSION = "0.30"
 VERSION_URL = "https://lip.tec.br/version.txt"
 RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
 GITHUB_API_URL = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/voice_typer.py"
@@ -181,8 +181,163 @@ class WorkerSignals(QObject):
     quota_updated = pyqtSignal(dict)
     groq_test_result = pyqtSignal(bool, str)
     toggle_recording_signal = pyqtSignal()
+    show_update_modal = pyqtSignal(str)
+    update_progress_signal = pyqtSignal(int, str)
 
 signals = WorkerSignals()
+
+# =============================================
+# MODAL VISUAL DE ATUALIZAÇÃO COM PROGRESSO REAL
+# =============================================
+class UpdateDialog(QDialog):
+    def __init__(self, remote_ver, parent=None):
+        super().__init__(parent)
+        self.remote_ver = remote_ver
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(440, 230)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.card = QFrame(self)
+        self.card.setStyleSheet("""
+            QFrame {
+                background-color: #0b0f19;
+                border: 2px solid #7c3aed;
+                border-radius: 14px;
+            }
+        """)
+        card_layout = QVBoxLayout(self.card)
+        card_layout.setContentsMargins(24, 22, 24, 22)
+        card_layout.setSpacing(12)
+        
+        lbl_title = QLabel("🚀 Atualizando o Digitador IA", self.card)
+        lbl_title.setStyleSheet("color: #f8fafc; font-size: 18px; font-weight: bold; border: none;")
+        card_layout.addWidget(lbl_title, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        self.lbl_sub = QLabel(f"Instalando a nova versão v{self.remote_ver}...", self.card)
+        self.lbl_sub.setStyleSheet("color: #c4b5fd; font-size: 13px; border: none;")
+        card_layout.addWidget(self.lbl_sub, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        card_layout.addSpacing(4)
+        
+        self.prog_bar = QProgressBar(self.card)
+        self.prog_bar.setRange(0, 100)
+        self.prog_bar.setValue(15)
+        self.prog_bar.setTextVisible(False)
+        self.prog_bar.setFixedHeight(12)
+        self.prog_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #1e1b4b;
+                border-radius: 6px;
+                border: none;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7c3aed, stop:1 #a855f7);
+                border-radius: 6px;
+            }
+        """)
+        card_layout.addWidget(self.prog_bar)
+        
+        self.lbl_status = QLabel("⏳ Conectando ao servidor...", self.card)
+        self.lbl_status.setStyleSheet("color: #94a3b8; font-size: 12px; border: none; font-weight: 500;")
+        card_layout.addWidget(self.lbl_status, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        layout.addWidget(self.card)
+        
+        screen = QApplication.primaryScreen().geometry()
+        self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
+        
+        signals.update_progress_signal.connect(self._on_progress)
+        threading.Thread(target=self._run_update_process, daemon=True).start()
+
+    def _on_progress(self, val, msg):
+        self.prog_bar.setValue(val)
+        self.lbl_status.setText(msg)
+
+    def _run_update_process(self):
+        try:
+            time.sleep(0.3)
+            temp_dir = os.environ.get("TEMP", "C:/Temp")
+            target_dir = os.path.abspath(BASE_DIR)
+            ts = int(time.time())
+            
+            signals.update_progress_signal.emit(30, "📥 Baixando arquivos atualizados...")
+            
+            files = [
+                ("https://lip.tec.br/voice_typer.py", "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py", os.path.join(temp_dir, "DigitadorIA_voice_typer.py.tmp")),
+                ("https://lip.tec.br/version.txt", "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/version.txt", os.path.join(temp_dir, "DigitadorIA_version.txt.tmp")),
+                ("https://lip.tec.br/updater.ps1", "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/updater.ps1", os.path.join(temp_dir, "DigitadorIA_updater.ps1.tmp"))
+            ]
+            
+            ctx = ssl.create_default_context()
+            for primary_url, fallback_url, out_path in files:
+                downloaded = False
+                try:
+                    req = urllib.request.Request(f"{primary_url}?t={ts}", headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'})
+                    with urllib.request.urlopen(req, context=ctx, timeout=8) as resp:
+                        content = resp.read()
+                        with open(out_path, "wb") as f:
+                            f.write(content)
+                        downloaded = True
+                except Exception:
+                    pass
+                
+                if not downloaded:
+                    try:
+                        req = urllib.request.Request(f"{fallback_url}?t={ts}", headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'})
+                        with urllib.request.urlopen(req, context=ctx, timeout=8) as resp:
+                            content = resp.read()
+                            with open(out_path, "wb") as f:
+                                f.write(content)
+                    except Exception as ex_dl:
+                        print(f"[AUTO-UPDATE] Erro no download: {ex_dl}", flush=True)
+
+            signals.update_progress_signal.emit(75, "⚡ Aplicando atualização no sistema...")
+            time.sleep(0.4)
+
+            # Cria script de swap ultrarrápido em %TEMP%
+            swap_script = os.path.join(temp_dir, "DigitadorIA_apply.ps1")
+            swap_code = f"""
+Stop-Process -Name "pythonw", "python" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 250
+if (Test-Path '{os.path.join(temp_dir, "DigitadorIA_voice_typer.py.tmp")}') {{
+    Move-Item -Path '{os.path.join(temp_dir, "DigitadorIA_voice_typer.py.tmp")}' -Destination '{os.path.join(target_dir, "voice_typer.py")}' -Force
+}}
+if (Test-Path '{os.path.join(temp_dir, "DigitadorIA_version.txt.tmp")}') {{
+    Move-Item -Path '{os.path.join(temp_dir, "DigitadorIA_version.txt.tmp")}' -Destination '{os.path.join(target_dir, "version.txt")}' -Force
+}}
+if (Test-Path '{os.path.join(temp_dir, "DigitadorIA_updater.ps1.tmp")}') {{
+    Move-Item -Path '{os.path.join(temp_dir, "DigitadorIA_updater.ps1.tmp")}' -Destination '{os.path.join(target_dir, "updater.ps1")}' -Force
+}}
+
+\$pyExe = '{os.path.join(target_dir, "venv", "Scripts", "pythonw.exe")}'
+if (-not (Test-Path \$pyExe)) {{ \$pyExe = '{os.path.join(target_dir, "venv", "Scripts", "python.exe")}' }}
+\$pyScript = '{os.path.join(target_dir, "voice_typer.py")}'
+
+if (Test-Path \$pyExe) {{
+    Start-Process -FilePath \$pyExe -ArgumentList "`"\$pyScript`"" -WorkingDirectory '{target_dir}'
+}} else {{
+    \$wscriptExe = "\$env:SystemRoot\\System32\\wscript.exe"
+    Start-Process -FilePath \$wscriptExe -ArgumentList "`"{os.path.join(target_dir, 'launcher.vbs')}`"" -WorkingDirectory '{target_dir}'
+}}
+"""
+            with open(swap_script, "w", encoding="utf-8") as f:
+                f.write(swap_code)
+
+            signals.update_progress_signal.emit(100, "✅ Atualização concluída! Reabrindo agora...")
+            time.sleep(0.6)
+
+            # Executa o swap e encerra
+            import subprocess
+            subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", swap_script], creationflags=subprocess.CREATE_NO_WINDOW)
+            time.sleep(0.3)
+            os._exit(0)
+            
+        except Exception as e:
+            print(f"[AUTO-UPDATE ERROR] {e}", flush=True)
+            signals.update_progress_signal.emit(100, f"❌ Erro ao atualizar: {e}")
 
 # =============================================
 # AUTO-UPDATE OBRIGATÓRIO, DESACOPLADO E SILENCIOSO
@@ -206,48 +361,9 @@ def check_for_updates(manual=False, auto_force=False):
             update_required = True
             signals.update_result_signal.emit(f"🚀 Atualizar para v{remote_ver} (Clique aqui)")
             
-            # Só fecha e roda o updater quando clicado manualmente
+            # Quando clicado manualmente, abre o modal visual com progresso em tempo real
             if manual:
-                is_updating = True
-                signals.update_result_signal.emit(f"⏳ Atualizando para v{remote_ver}...")
-                print(f"[AUTO-UPDATE] Disparando updater para v{remote_ver}...", flush=True)
-                
-                # Prepara o script updater.ps1 em %TEMP%
-                temp_dir = os.environ.get("TEMP", "C:/Temp")
-                temp_updater = os.path.join(temp_dir, "DigitadorIA_updater.ps1")
-                
-                updater_code = ""
-                try:
-                    upd_api = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/updater.ps1"
-                    api_req = urllib.request.Request(upd_api, headers={'User-Agent': 'Mozilla/5.0'})
-                    with urllib.request.urlopen(api_req, context=ctx, timeout=6) as api_resp:
-                        data = json.loads(api_resp.read().decode('utf-8'))
-                        updater_code = base64.b64decode(data['content']).decode('utf-8')
-                except: pass
-                
-                if not updater_code and os.path.exists(os.path.join(BASE_DIR, "updater.ps1")):
-                    try:
-                        with open(os.path.join(BASE_DIR, "updater.ps1"), "r", encoding="utf-8") as f:
-                            updater_code = f.read()
-                    except: pass
-                    
-                if updater_code:
-                    try:
-                        with open(temp_updater, "w", encoding="utf-8") as f:
-                            f.write(updater_code)
-                    except: pass
-                
-                target_dir = os.path.abspath(BASE_DIR)
-                ps_args = f'-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{temp_updater}" -TargetDir "{target_dir}"'
-                
-                # Executa o atualizador de forma independente e encerra o app
-                try:
-                    import subprocess
-                    subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", temp_updater, "-TargetDir", target_dir], creationflags=subprocess.CREATE_NO_WINDOW)
-                except Exception:
-                    ctypes.windll.shell32.ShellExecuteW(None, "open", "powershell.exe", ps_args, None, 0)
-                time.sleep(0.8)
-                os._exit(0)
+                signals.show_update_modal.emit(remote_ver)
         else:
             update_required = False
             if manual:
@@ -1489,6 +1605,7 @@ class MainWindow(QMainWindow):
         signals.quota_updated.connect(self.render_quota_ui)
         signals.groq_test_result.connect(self.on_groq_test_finished)
         signals.toggle_recording_signal.connect(self.toggle_recording)
+        signals.show_update_modal.connect(self.open_update_dialog)
         
         self.mic_tester = MicTestManager()
         self.stack.currentChanged.connect(self.on_page_changed)
@@ -1503,10 +1620,14 @@ class MainWindow(QMainWindow):
         self.update_timer.timeout.connect(lambda: threading.Thread(target=lambda: check_for_updates(auto_force=True), daemon=True).start())
         self.update_timer.start(15 * 60 * 1000)
 
-        # Timer inteligente de liberação de memória após 60s de inatividade (roda a cada 10s)
+        # Timer inteligente de liberação de memória após 5 minutos de inatividade (roda a cada 10s)
         self.idle_memory_timer = QTimer(self)
         self.idle_memory_timer.timeout.connect(unload_model_if_idle)
         self.idle_memory_timer.start(10000)
+
+    def open_update_dialog(self, remote_ver):
+        self.update_dialog = UpdateDialog(remote_ver, self)
+        self.update_dialog.show()
 
     def manual_check_update(self):
         self.btn_version.setText("⏳ Verificando...")
