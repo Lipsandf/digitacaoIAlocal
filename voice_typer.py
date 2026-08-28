@@ -93,7 +93,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES (PERSISTÊNCIA DUPLA)
 # =============================================
-APP_VERSION = "0.26"
+APP_VERSION = "0.27"
 VERSION_URL = "https://lip.tec.br/version.txt"
 RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
 GITHUB_API_URL = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/voice_typer.py"
@@ -430,9 +430,15 @@ class MicTestManager:
             self.p = None
 
 # =============================================
-# GRAVAÇÃO E TRANSCRIÇÃO (LOCAL + GROQ)
+# GERENCIADOR DINÂMICO DE MEMÓRIA DA IA (LAZY LOAD & AUTO-UNLOAD)
 # =============================================
 model = None
+model_lock = threading.Lock()
+model_loading = False
+model_ready_event = threading.Event()
+model_last_used_time = 0.0
+MODEL_IDLE_TIMEOUT = 60.0  # Descarrega da memória após 60 segundos de inatividade
+
 is_recording = False
 is_transcribing = False
 audio_queue = []
@@ -440,6 +446,118 @@ last_context = ""
 current_rms = 0.0
 hotkey_listener = None
 cuda_driver_warning = False
+
+def ensure_model_loaded(async_mode=False):
+    """
+    Inicia o carregamento do modelo de IA se não estiver carregado.
+    Se async_mode=True, executa em thread de fundo (ex: enquanto o usuário fala).
+    Se async_mode=False, aguarda até carregar e retorna o modelo.
+    """
+    global model, model_loading, model_ready_event, model_last_used_time
+    
+    model_last_used_time = time.time()
+    
+    with model_lock:
+        if model is not None:
+            return model
+        if not model_loading:
+            model_loading = True
+            model_ready_event.clear()
+            
+            def _loader():
+                global model, model_loading, cuda_driver_warning
+                try:
+                    print(f"[IA MANAGER] Carregando modelo Whisper ({MODEL_SIZE}) na memória...", flush=True)
+                    loaded = None
+                    # Tenta CUDA FP16
+                    try:
+                        loaded = WhisperModel(MODEL_SIZE, device="cuda", compute_type="float16")
+                        print("[IA MANAGER] Modelo carregado na GPU NVIDIA via CUDA (FP16)!", flush=True)
+                    except Exception:
+                        # Tenta CUDA INT8
+                        try:
+                            loaded = WhisperModel(MODEL_SIZE, device="cuda", compute_type="int8")
+                            print("[IA MANAGER] Modelo carregado na GPU NVIDIA via CUDA (INT8)!", flush=True)
+                        except Exception:
+                            # Tenta CUDA FLOAT32
+                            try:
+                                loaded = WhisperModel(MODEL_SIZE, device="cuda", compute_type="float32")
+                                print("[IA MANAGER] Modelo carregado na GPU NVIDIA via CUDA (FLOAT32)!", flush=True)
+                            except Exception as e_f32:
+                                err_msg = str(e_f32).lower()
+                                if "insufficient" in err_msg or "driver" in err_msg:
+                                    cuda_driver_warning = True
+                    
+                    # Fallback CPU
+                    if loaded is None:
+                        print("[IA MANAGER] Utilizando processamento em CPU...", flush=True)
+                        import multiprocessing
+                        total_cores = multiprocessing.cpu_count()
+                        smart_threads = max(1, total_cores - 2) if total_cores > 4 else total_cores
+                        try:
+                            loaded = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=smart_threads)
+                        except Exception:
+                            try:
+                                loaded = WhisperModel(MODEL_SIZE, device="cpu", compute_type="float32", cpu_threads=smart_threads)
+                            except Exception as e3:
+                                print(f"[IA MANAGER] Falha ao carregar modelo na CPU: {e3}", flush=True)
+                    
+                    with model_lock:
+                        model = loaded
+                        model_loading = False
+                        model_ready_event.set()
+                        print("[IA MANAGER] Modelo pronto para uso imediato!", flush=True)
+                except Exception as ex:
+                    print(f"[IA MANAGER] Erro inesperado ao carregar modelo: {ex}", flush=True)
+                    with model_lock:
+                        model_loading = False
+                        model_ready_event.set()
+
+            threading.Thread(target=_loader, daemon=True).start()
+
+    if not async_mode:
+        model_ready_event.wait(timeout=30.0)
+        return model
+    return None
+
+def unload_model_if_idle():
+    """
+    Descarrega o modelo da memória (RAM/VRAM) se estiver inativo há mais de MODEL_IDLE_TIMEOUT segundos.
+    """
+    global model, model_loading
+    with model_lock:
+        if model is not None and not model_loading and not is_recording and not is_transcribing:
+            idle_seconds = time.time() - model_last_used_time
+            if idle_seconds >= MODEL_IDLE_TIMEOUT:
+                print(f"[IA MANAGER] Inativo por {int(idle_seconds)}s. Liberando memória RAM/VRAM...", flush=True)
+                del model
+                model = None
+                import gc
+                gc.collect()
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass
+                print("[IA MANAGER] Memória liberada com sucesso. IA colocada em standby!", flush=True)
+
+def force_unload_model():
+    """Força o descarregamento imediato (ex: ao trocar para modo Groq Cloud)."""
+    global model, model_loading
+    with model_lock:
+        if model is not None and not is_recording and not is_transcribing:
+            print("[IA MANAGER] Descarregando modelo local imediatamente...", flush=True)
+            del model
+            model = None
+            import gc
+            gc.collect()
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
 
 def recording_thread_func():
     global is_recording, audio_queue, current_rms
@@ -487,18 +605,12 @@ def recording_thread_func():
         signals.hide_overlay.emit()
 
 def transcribe_and_type(buffer, sample_rate):
-    global last_context, model, is_transcribing, overlay_instance
+    global last_context, is_transcribing, overlay_instance, model_last_used_time
     
+    model_last_used_time = time.time()
     engine = config.get("engine", "local")
     groq_key = config.get("groq_api_key", "").strip()
 
-    # Se estiver em modo local e o modelo ainda não carregou
-    if engine == "local" and model is None:
-        is_transcribing = False
-        signals.hide_overlay.emit()
-        play_beep(400, 200)
-        return
-    
     raw_data = b''.join(buffer)
     target_rate = 16000
     
@@ -554,8 +666,10 @@ def transcribe_and_type(buffer, sample_rate):
             else:
                 print(f"[GROQ ERROR] {res.get('error')}. Tentando fallback local...", flush=True)
                 play_beep(500, 150)
-                if model is not None:
-                    segments, _ = model.transcribe(
+                fallback_model = ensure_model_loaded(async_mode=False)
+                if fallback_model is not None:
+                    buf.seek(0)
+                    segments, _ = fallback_model.transcribe(
                         buf, beam_size=5, language="pt",
                         condition_on_previous_text=True,
                         initial_prompt=last_context if last_context else None,
@@ -565,14 +679,19 @@ def transcribe_and_type(buffer, sample_rate):
         
         # --- 2. MODO LOCAL (OU FALLBACK) ---
         else:
-            if model is not None:
-                segments, _ = model.transcribe(
+            active_model = ensure_model_loaded(async_mode=False)
+            if active_model is not None:
+                buf.seek(0)
+                segments, _ = active_model.transcribe(
                     buf, beam_size=5, language="pt",
                     condition_on_previous_text=True,
                     initial_prompt=last_context if last_context else None,
                     vad_filter=True
                 )
                 text = "".join([s.text for s in segments]).strip()
+            else:
+                print("[IA MANAGER] Falha: modelo local indisponível.", flush=True)
+                play_beep(400, 200)
         
         # Digitação automática
         if text:
@@ -1380,6 +1499,11 @@ class MainWindow(QMainWindow):
         self.update_timer.timeout.connect(lambda: threading.Thread(target=lambda: check_for_updates(auto_force=True), daemon=True).start())
         self.update_timer.start(15 * 60 * 1000)
 
+        # Timer inteligente de liberação de memória após 60s de inatividade (roda a cada 10s)
+        self.idle_memory_timer = QTimer(self)
+        self.idle_memory_timer.timeout.connect(unload_model_if_idle)
+        self.idle_memory_timer.start(10000)
+
     def manual_check_update(self):
         self.btn_version.setText("⏳ Verificando...")
         threading.Thread(target=lambda: check_for_updates(manual=True), daemon=True).start()
@@ -1409,6 +1533,8 @@ class MainWindow(QMainWindow):
             config["engine"] = new_engine
             save_config()
             self.update_engine_ui(new_engine)
+            if new_engine == "groq":
+                threading.Thread(target=force_unload_model, daemon=True).start()
         except Exception as e:
             print(f"[SET ENGINE ERROR] {e}", flush=True)
 
@@ -1620,6 +1746,13 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'btn_mic_test_toggle'):
                 self.btn_mic_test_toggle.setText("⏹️ Parar Gravação")
                 self.btn_mic_test_toggle.setStyleSheet("background-color: #ef4444; color: white; border-radius: 5px; padding: 6px 14px; font-weight: bold;")
+            
+            # Enquanto a pessoa fala, inicia o pré-carregamento concorrente da IA em background
+            engine = config.get("engine", "local")
+            groq_key = config.get("groq_api_key", "").strip()
+            if engine == "local" or not groq_key:
+                ensure_model_loaded(async_mode=True)
+                
             threading.Thread(target=recording_thread_func, daemon=True).start()
         else:
             is_recording = False
@@ -1713,55 +1846,11 @@ class MainWindow(QMainWindow):
         self.load_history()
 
 # =============================================
-# INICIALIZAÇÃO DO MODELO LOCAL (DAEMON THREAD)
+# INICIALIZAÇÃO DO MODELO LOCAL
 # =============================================
 def load_ai_model():
-    global model, cuda_driver_warning
-    # Tenta CUDA FP16
-    try:
-        model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="float16")
-        play_beep(1000, 100)
-        play_beep(1500, 100)
-        print("Carregado na GPU NVIDIA via CUDA (float16)!")
-        return
-    except Exception as e:
-        # Tenta CUDA INT8
-        try:
-            model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="int8")
-            play_beep(1000, 100)
-            play_beep(1500, 100)
-            print("Carregado na GPU NVIDIA via CUDA (Modo INT8)!")
-            return
-        except Exception as e_int8:
-            # Tenta CUDA FLOAT32
-            try:
-                model = WhisperModel(MODEL_SIZE, device="cuda", compute_type="float32")
-                play_beep(1000, 100)
-                play_beep(1500, 100)
-                print("Carregado na GPU NVIDIA via CUDA (Modo FLOAT32)!")
-                return
-            except Exception as e_f32:
-                err_msg = str(e_f32).lower()
-                if "insufficient" in err_msg or "driver" in err_msg:
-                    cuda_driver_warning = True
-
-    # Fallback para CPU
-    print("Caindo para o modo CPU...")
-    import multiprocessing
-    total_cores = multiprocessing.cpu_count()
-    smart_threads = max(1, total_cores - 2) if total_cores > 4 else total_cores
-    
-    try:
-        model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8", cpu_threads=smart_threads)
-        play_beep(800, 100)
-        play_beep(1200, 100)
-    except Exception as e2:
-        try:
-            model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="float32", cpu_threads=smart_threads)
-            play_beep(800, 100)
-            play_beep(1200, 100)
-        except Exception as e3:
-            print("Falha total na CPU:", e3)
+    """Helper para carregar o modelo de IA sob demanda."""
+    return ensure_model_loaded(async_mode=False)
 
 # =============================================
 # MAIN
@@ -1776,9 +1865,6 @@ def main():
 
     app_instance = QApplication(sys.argv)
     app_instance.setQuitOnLastWindowClosed(False)
-    
-    # Carrega modelo local em segundo plano
-    threading.Thread(target=load_ai_model, daemon=True).start()
     
     # Checa atualizações obrigatoriamente na inicialização (segundo plano imediato)
     threading.Thread(target=lambda: check_for_updates(auto_force=True), daemon=True).start()
