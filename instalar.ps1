@@ -256,8 +256,8 @@ if ($gpuType -eq "nvidia") {
     Write-Host "Baixando drivers de aceleracao NVIDIA CUDA..." -ForegroundColor Cyan
     & $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile nvidia-cublas-cu12 nvidia-cudnn-cu12 PyQt6 pynput pillow
 } elseif ($gpuType -eq "amd") {
-    Write-Host "Baixando drivers de aceleracao AMD DirectML..." -ForegroundColor Cyan
-    & $pipCmd -m pip install SpeechRecognition PyAudio soundfile PyQt6 pynput pillow onnxruntime-directml optimum[onnxruntime] torch
+    Write-Host "Baixando dependencias otimizadas para processadores e graficos AMD..." -ForegroundColor Cyan
+    & $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile PyQt6 pynput pillow
 } else {
     Write-Host "Baixando pacote leve otimizado para CPU..." -ForegroundColor Cyan
     & $pipCmd -m pip install faster-whisper SpeechRecognition PyAudio soundfile PyQt6 pynput pillow

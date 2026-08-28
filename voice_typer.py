@@ -88,12 +88,16 @@ try:
 except Exception:
     pass
 
-from faster_whisper import WhisperModel
+try:
+    from faster_whisper import WhisperModel
+except Exception as e_whisper:
+    WhisperModel = None
+    print(f"[IA WARNING] faster_whisper nao pode ser importado: {e_whisper}", flush=True)
 
 # =============================================
 # ESTADOS E CONFIGURAÇÕES (PERSISTÊNCIA DUPLA)
 # =============================================
-APP_VERSION = "0.30"
+APP_VERSION = "0.31"
 VERSION_URL = "https://lip.tec.br/version.txt"
 RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
 GITHUB_API_URL = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/voice_typer.py"
@@ -575,6 +579,10 @@ def ensure_model_loaded(async_mode=False):
     """
     global model, model_loading, model_ready_event, model_last_used_time
     
+    if WhisperModel is None:
+        print("[IA MANAGER] faster_whisper indisponivel no sistema. Utilize o modo Groq Cloud.", flush=True)
+        return None
+
     model_last_used_time = time.time()
     
     with model_lock:
