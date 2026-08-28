@@ -93,7 +93,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES (PERSISTÊNCIA DUPLA)
 # =============================================
-APP_VERSION = "0.27"
+APP_VERSION = "0.28"
 VERSION_URL = "https://lip.tec.br/version.txt"
 RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
 GITHUB_API_URL = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/voice_typer.py"
@@ -437,7 +437,7 @@ model_lock = threading.Lock()
 model_loading = False
 model_ready_event = threading.Event()
 model_last_used_time = 0.0
-MODEL_IDLE_TIMEOUT = 60.0  # Descarrega da memória após 60 segundos de inatividade
+MODEL_IDLE_TIMEOUT = 300.0  # Descarrega da memória após 5 minutos (300 segundos) de inatividade
 
 is_recording = False
 is_transcribing = False
