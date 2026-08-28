@@ -93,7 +93,7 @@ from faster_whisper import WhisperModel
 # =============================================
 # ESTADOS E CONFIGURAÇÕES (PERSISTÊNCIA DUPLA)
 # =============================================
-APP_VERSION = "0.28"
+APP_VERSION = "0.29"
 VERSION_URL = "https://lip.tec.br/version.txt"
 RAW_CODE_URL = "https://raw.githubusercontent.com/Lipsandf/digitacaoIAlocal/main/voice_typer.py"
 GITHUB_API_URL = "https://api.github.com/repos/Lipsandf/digitacaoIAlocal/contents/voice_typer.py"
@@ -240,9 +240,13 @@ def check_for_updates(manual=False, auto_force=False):
                 target_dir = os.path.abspath(BASE_DIR)
                 ps_args = f'-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{temp_updater}" -TargetDir "{target_dir}"'
                 
-                # Dispara com elevação RunAs para atualizar em Program Files
-                ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", ps_args, None, 0)
-                time.sleep(1.0)
+                # Executa o atualizador de forma independente e encerra o app
+                try:
+                    import subprocess
+                    subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", temp_updater, "-TargetDir", target_dir], creationflags=subprocess.CREATE_NO_WINDOW)
+                except Exception:
+                    ctypes.windll.shell32.ShellExecuteW(None, "open", "powershell.exe", ps_args, None, 0)
+                time.sleep(0.8)
                 os._exit(0)
         else:
             update_required = False
@@ -1933,6 +1937,8 @@ def main():
     tray.show()
     
     main_window.show()
+    main_window.raise_()
+    main_window.activateWindow()
     sys.exit(app_instance.exec())
 
 if __name__ == "__main__":

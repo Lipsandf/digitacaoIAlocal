@@ -131,7 +131,13 @@ $shortcut.TargetPath = $wscriptExe
 $shortcut.Arguments = "`"$TargetDir\launcher.vbs`""
 $shortcut.IconLocation = "$TargetDir\icon.ico"
 $shortcut.WorkingDirectory = "$TargetDir"
-$shortcut.Save()
+# 8. Reabre o aplicativo garantindo execucao imediata na sessao do usuario
+$pyExe = "$TargetDir\venv\Scripts\pythonw.exe"
+if (-not (Test-Path $pyExe)) { $pyExe = "$TargetDir\venv\Scripts\python.exe" }
+$pyScript = "$TargetDir\voice_typer.py"
 
-# Dispara o aplicativo de forma desacoplada
-Start-Process -FilePath $wscriptExe -ArgumentList "`"$TargetDir\launcher.vbs`"" -WorkingDirectory "$TargetDir"
+if (Test-Path $pyExe) {
+    Start-Process -FilePath $pyExe -ArgumentList "`"$pyScript`"" -WorkingDirectory "$TargetDir"
+} else {
+    Start-Process -FilePath $wscriptExe -ArgumentList "`"$TargetDir\launcher.vbs`"" -WorkingDirectory "$TargetDir"
+}
